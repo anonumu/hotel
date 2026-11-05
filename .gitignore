@@ -1,0 +1,21 @@
+# IDE и настройки редакторов
+.idea/
+.vscode/
+*.iml
+*.iws
+
+# Maven и артефакты сборки
+target/
+**/target/
+hotel-backend/target/
+hotel-backend/maven/
+
+# Логи и временные файлы ОС
+*.log
+.DS_Store
+Thumbs.db
+
+# Внутренние служебные файлы
+.agents/
+push-to-github.bat
+

@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ИС «Гостиница» — Управление номерным фондом</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Верхняя панель сайта -->
+  <header class="navbar">
+    <div class="navbar-container">
+      <div class="brand">
+        <h1>ИС «Гостиница»</h1>
+        <div class="brand-sub">Практическая работа • Студент: Сигналов В. А. (3 ИС-3) • Преподаватель: Самсонов И. В.</div>
+      </div>
+      <div class="server-box">
+        <span id="server-status-label" class="badge badge-AVAILABLE">Проверка связи...</span>
+        <button class="btn btn-sm btn-secondary" onclick="checkBackendConnection().then(() => notify('Статус связи обновлен'))">
+          Обновить
+        </button>
+      </div>
+    </div>
+
+    <!-- Вкладки навигации -->
+    <nav class="nav-tabs">
+      <button class="nav-link active" data-view="dashboard">Сводка</button>
+      <button class="nav-link" data-view="rooms">Номерной фонд <span id="nav-rooms-badge" class="nav-counter"></span></button>
+      <button class="nav-link" data-view="bookings">Бронирования <span id="nav-bookings-badge" class="nav-counter"></span></button>
+      <button class="nav-link" data-view="guests">Гости <span id="nav-guests-badge" class="nav-counter"></span></button>
+      <button class="nav-link" data-view="staff">Сотрудники <span id="nav-staff-badge" class="nav-counter"></span></button>
+      <button class="nav-link" data-view="tariffs">Тарифы и касса</button>
+      <button class="nav-link" data-view="reports">Отчеты</button>
+    </nav>
+  </header>
+
+  <!-- Основной контейнер -->
+  <main class="container">
+
+    <!-- 1. ДАШБОРД (СВОДКА) -->
+    <section id="view-dashboard" class="screen-view active">
+      
+      <!-- Статистические показатели -->
+      <div class="summary-boxes">
+        <div class="summary-box">
+          <div class="title">Загрузка отеля</div>
+          <div id="dash-kpi-rate" class="val" style="color:#0d6efd">0%</div>
+        </div>
+
+        <div class="summary-box">
+          <div class="title">Свободные номера</div>
+          <div id="dash-kpi-avail" class="val" style="color:#198754">0</div>
+        </div>
+
+        <div class="summary-box">
+          <div class="title">Номера на уборке</div>
+          <div id="dash-kpi-clean" class="val" style="color:#0dcaf0">0</div>
+        </div>
+
+        <div class="summary-box">
+          <div class="title">Общая выручка</div>
+          <div id="dash-kpi-rev" class="val" style="color:#212529">0 ₽</div>
+        </div>
+      </div>
+
+      <!-- Карта номеров -->
+      <div class="card">
+        <div class="card-title">Номерной фонд (клик по номеру меняет статус)</div>
+        <div id="dash-matrix" class="rooms-grid"></div>
+      </div>
+
+      <!-- Проживающие гости -->
+      <div class="card">
+        <div class="card-title">Текущие постояльцы в отеле</div>
+        <div class="table-responsive">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Гость</th>
+                <th>Телефон</th>
+                <th>Паспорт</th>
+                <th>Статус</th>
+                <th>Действие</th>
+              </tr>
+            </thead>
+            <tbody id="dash-arrivals"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- 2. НОМЕРА -->
+    <section id="view-rooms" class="screen-view">
+      <div class="card">
+        <div class="table-toolbar">
+          <div style="display:flex; gap:8px; flex-wrap:wrap">
+            <input type="text" id="room-search-input" class="form-control" placeholder="Поиск по номеру..." oninput="filterRoomsList()">
+            <select id="room-status-filter" class="form-control" onchange="filterRoomsList()">
+              <option value="">Все статусы</option>
+              <option value="AVAILABLE">Свободен</option>
+              <option value="OCCUPIED">Занят</option>
+              <option value="BOOKED">Забронирован</option>
+              <option value="CLEANING">На уборке</option>
+              <option value="OUT_OF_ORDER">Ремонт</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" onclick="openModal('modal-add-room')">
+            + Добавить номер
+          </button>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Номер</th>
+                <th>Категория</th>
+                <th>Этаж</th>
+                <th>Вместимость</th>
+                <th>Цена за сутки</th>
+                <th>Статус</th>
+                <th>Действия</th>
+              </tr>
+            </thead>
+            <tbody id="rooms-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. БРОНИРОВАНИЯ -->
+    <section id="view-bookings" class="screen-view">
+      <div class="card">
+        <div class="card-header-flex">
+          <div class="card-title" style="margin-bottom:0; border:none">Журнал бронирований</div>
+          <button class="btn btn-primary" onclick="openModal('modal-add-booking')">
+            + Создать бронь
+          </button>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Гость</th>
+                <th>Номер</th>
+                <th>Даты проживания</th>
+                <th>Сумма</th>
+                <th>Статус</th>
+                <th>Действия</th>
+              </tr>
+            </thead>
+            <tbody id="bookings-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. ГОСТИ -->
+    <section id="view-guests" class="screen-view">
+      <div class="card">
+        <div class="card-header-flex">
+          <div class="card-title" style="margin-bottom:0; border:none">База постояльцев</div>
+          <button class="btn btn-primary" onclick="openModal('modal-add-guest')">
+            + Зарегистрировать гостя
+          </button>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>ФИО</th>
+                <th>Паспорт</th>
+                <th>Телефон</th>
+                <th>Email</th>
+                <th>Гражданство</th>
+                <th>Статус</th>
+                <th>Действие</th>
+              </tr>
+            </thead>
+            <tbody id="guests-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. ПЕРСОНАЛ -->
+    <section id="view-staff" class="screen-view">
+      <div class="card">
+        <div class="card-header-flex">
+          <div class="card-title" style="margin-bottom:0; border:none">Сотрудники гостиницы</div>
+          <button class="btn btn-primary" onclick="openModal('modal-add-staff')">
+            + Добавить сотрудника
+          </button>
+        </div>
+        <div id="staff-grid" class="staff-grid"></div>
+      </div>
+    </section>
+
+    <!-- 6. ТАРИФЫ И КАССА -->
+    <section id="view-tariffs" class="screen-view">
+      <div class="card">
+        <div class="card-title">Тарифные планы</div>
+        <div class="table-responsive">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Тариф</th>
+                <th>Категория</th>
+                <th>Цена за сутки</th>
+                <th>Период</th>
+                <th>Статус</th>
+              </tr>
+            </thead>
+            <tbody id="tariffs-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header-flex">
+          <div class="card-title" style="margin-bottom:0; border:none">Кассовый журнал платежей</div>
+          <button class="btn btn-primary" onclick="openPaymentModal()">
+            + Принять оплату
+          </button>
+        </div>
+        <div class="table-responsive">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Основание</th>
+                <th>Сумма</th>
+                <th>Способ оплаты</th>
+                <th>Дата и время</th>
+                <th>Примечание</th>
+              </tr>
+            </thead>
+            <tbody id="payments-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 7. АНАЛИТИКА И ОТЧЕТЫ -->
+    <section id="view-reports" class="screen-view">
+      <div class="summary-boxes">
+        <div class="summary-box">
+          <div class="title">Средняя загрузка фонда</div>
+          <div id="rep-occ-rate" class="val" style="color:#0d6efd">0%</div>
+          <div id="rep-occ-total" style="font-size:12px; color:#6c757d; margin-top:4px">Всего 0 номеров</div>
+          <div id="rep-occ-breakdown" style="font-size:11.5px; color:#495057; margin-top:6px"></div>
+        </div>
+
+        <div class="summary-box">
+          <div class="title">Общая выручка</div>
+          <div id="rep-rev-total" class="val" style="color:#198754">0 ₽</div>
+          <div id="rep-rev-tx" style="font-size:12px; color:#6c757d; margin-top:4px">0 платежей</div>
+        </div>
+      </div>
+
+      <div class="report-grid">
+        <div class="card">
+          <div class="card-title">Структура выручки</div>
+          <div style="display:flex; flex-direction:column; gap:10px; font-size:13px">
+            <div style="display:flex; justify-content:space-between; padding-bottom:8px; border-bottom:1px solid #edf2f7">
+              <span style="color:#6c757d">Оплата картой:</span>
+              <strong id="rep-card-sum">0 ₽</strong>
+            </div>
+            <div style="display:flex; justify-content:space-between; padding-bottom:8px; border-bottom:1px solid #edf2f7">
+              <span style="color:#6c757d">Безналичный перевод:</span>
+              <strong id="rep-transfer-sum">0 ₽</strong>
+            </div>
+            <div style="display:flex; justify-content:space-between">
+              <span style="color:#6c757d">Наличный расчет:</span>
+              <strong id="rep-cash-sum">0 ₽</strong>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Эффективность персонала</div>
+          <div id="rep-staff-kpi"></div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ======================================================================
+       МОДАЛЬНЫЕ ОКНА
+       ====================================================================== -->
+
+  <!-- 1. Смена статуса номера -->
+  <div id="modal-status" class="modal-backdrop">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>Статус номера № <span id="status-modal-num"></span></h3>
+        <button class="modal-close-btn" onclick="closeModal('modal-status')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Выберите новый статус</label>
+          <select id="modal-room-status-sel" class="form-control">
+            <option value="AVAILABLE">Свободен</option>
+            <option value="OCCUPIED">Занят</option>
+            <option value="BOOKED">Забронирован</option>
+            <option value="CLEANING">На уборке</option>
+            <option value="OUT_OF_ORDER">Ремонт</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('modal-status')">Отмена</button>
+        <button class="btn btn-primary" onclick="applyRoomStatus()">Сохранить</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. Добавление номера -->
+  <div id="modal-add-room" class="modal-backdrop">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>Добавить номер</h3>
+        <button class="modal-close-btn" onclick="closeModal('modal-add-room')">&times;</button>
+      </div>
+      <form onsubmit="submitRoom(event)">
+        <div class="modal-body form-grid">
+          <div class="form-group">
+            <label>Номер комнаты</label>
+            <input type="text" id="add-room-num" class="form-control" required placeholder="Например: 501">
+          </div>
+          <div class="form-group">
+            <label>Категория</label>
+            <select id="add-room-type" class="form-control">
+              <option value="STANDARD">Стандарт</option>
+              <option value="SUPERIOR">Супериор</option>
+              <option value="DELUXE">Делюкс</option>
+              <option value="SUITE">Люкс</option>
+              <option value="PRESIDENTIAL">Президентский</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Этаж</label>
+            <input type="number" id="add-room-floor" class="form-control" value="1" min="1" max="50" required>
+          </div>
+          <div class="form-group">
+            <label>Вместимость (чел.)</label>
+            <input type="number" id="add-room-guests" class="form-control" value="2" min="1" max="8" required>
+          </div>
+          <div class="form-group full">
+            <label>Цена за сутки (₽)</label>
+            <input type="number" id="add-room-price" class="form-control" value="4500" min="500" step="100" required>
+          </div>
+          <div class="form-group full">
+            <label>Статус при создании</label>
+            <select id="add-room-status" class="form-control">
+              <option value="AVAILABLE" selected>Свободен</option>
+              <option value="OCCUPIED">Занят</option>
+              <option value="BOOKED">Забронирован</option>
+              <option value="CLEANING">На уборке</option>
+              <option value="OUT_OF_ORDER">Ремонт</option>
+            </select>
+          </div>
+          <div class="form-group full">
+            <label>Описание</label>
+            <textarea id="add-room-desc" class="form-control" rows="2" placeholder="Кровать king-size, балкон, мини-бар..."></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('modal-add-room')">Отмена</button>
+          <button type="submit" class="btn btn-primary">Создать</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 3. Новое бронирование -->
+  <div id="modal-add-booking" class="modal-backdrop">
+    <div class="modal-box wide">
+      <div class="modal-header">
+        <h3>Новое бронирование</h3>
+        <button class="modal-close-btn" onclick="closeModal('modal-add-booking')">&times;</button>
+      </div>
+      <form onsubmit="submitBooking(event)">
+        <div class="modal-body form-grid">
+          <div class="form-group full">
+            <label>Номер</label>
+            <select id="newbook-room" class="form-control" required></select>
+          </div>
+          <div class="form-group full">
+            <label>Гость</label>
+            <select id="newbook-guest" class="form-control" required></select>
+          </div>
+          <div class="form-group">
+            <label>Дата заезда</label>
+            <input type="date" id="newbook-checkin" class="form-control" value="2026-11-10" required>
+          </div>
+          <div class="form-group">
+            <label>Дата выезда</label>
+            <input type="date" id="newbook-checkout" class="form-control" value="2026-11-15" required>
+          </div>
+          <div class="form-group full">
+            <label>Количество гостей</label>
+            <input type="number" id="newbook-count" class="form-control" value="2" min="1" max="6" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('modal-add-booking')">Отмена</button>
+          <button type="submit" class="btn btn-primary">Забронировать</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 4. Регистрация гостя -->
+  <div id="modal-add-guest" class="modal-backdrop">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>Регистрация гостя</h3>
+        <button class="modal-close-btn" onclick="closeModal('modal-add-guest')">&times;</button>
+      </div>
+      <form onsubmit="submitGuest(event)">
+        <div class="modal-body form-grid">
+          <div class="form-group">
+            <label>Имя</label>
+            <input type="text" id="guest-fn" class="form-control" required placeholder="Константин">
+          </div>
+          <div class="form-group">
+            <label>Фамилия</label>
+            <input type="text" id="guest-ln" class="form-control" required placeholder="Воронов">
+          </div>
+          <div class="form-group">
+            <label>Телефон</label>
+            <input type="tel" id="guest-ph" class="form-control" required placeholder="+7 (999) 111-22-33">
+          </div>
+          <div class="form-group">
+            <label>Email</label>
+            <input type="email" id="guest-em" class="form-control" required placeholder="guest@domain.com">
+          </div>
+          <div class="form-group">
+            <label>Паспорт</label>
+            <input type="text" id="guest-pass" class="form-control" required placeholder="4512 876543">
+          </div>
+          <div class="form-group">
+            <label>Гражданство</label>
+            <input type="text" id="guest-nat" class="form-control" value="Россия" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('modal-add-guest')">Отмена</button>
+          <button type="submit" class="btn btn-primary">Зарегистрировать</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 5. Прием сотрудника -->
+  <div id="modal-add-staff" class="modal-backdrop">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>Новый сотрудник</h3>
+        <button class="modal-close-btn" onclick="closeModal('modal-add-staff')">&times;</button>
+      </div>
+      <form onsubmit="submitStaff(event)">
+        <div class="modal-body form-grid">
+          <div class="form-group">
+            <label>Имя</label>
+            <input type="text" id="staff-fn" class="form-control" required>
+          </div>
+          <div class="form-group">
+            <label>Фамилия</label>
+            <input type="text" id="staff-ln" class="form-control" required>
+          </div>
+          <div class="form-group full">
+            <label>Должность</label>
+            <select id="staff-pos" class="form-control">
+              <option value="RECEPTIONIST">Портье</option>
+              <option value="MAID">Горничная</option>
+              <option value="MANAGER">Менеджер по бронированию</option>
+              <option value="ACCOUNTANT">Бухгалтер</option>
+              <option value="ADMIN">Администратор</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Email</label>
+            <input type="email" id="staff-em" class="form-control" required>
+          </div>
+          <div class="form-group">
+            <label>Телефон</label>
+            <input type="tel" id="staff-ph" class="form-control" required>
+          </div>
+          <div class="form-group full">
+            <label>Дата приема</label>
+            <input type="date" id="staff-date" class="form-control">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('modal-add-staff')">Отмена</button>
+          <button type="submit" class="btn btn-primary">Добавить</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 6. График смены сотрудника -->
+  <div id="modal-staff-shift" class="modal-backdrop">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>График рабочей смены</h3>
+        <button class="modal-close-btn" onclick="closeModal('modal-staff-shift')">&times;</button>
+      </div>
+      <div class="modal-body" style="display:flex; flex-direction:column; gap:12px">
+        <div>
+          <div style="font-size:16px; font-weight:bold" id="sch-name"></div>
+          <div style="font-size:12px; color:#0d6efd" id="sch-pos"></div>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; font-size:12.5px; padding-top:10px; border-top:1px solid #dee2e6">
+          <div>
+            <div style="color:#6c757d">Часы смены:</div>
+            <strong id="sch-hours"></strong>
+          </div>
+          <div>
+            <div style="color:#6c757d">График работы:</div>
+            <strong id="sch-plan"></strong>
+          </div>
+          <div>
+            <div style="color:#6c757d">Закрепленная зона:</div>
+            <strong id="sch-zone"></strong>
+          </div>
+          <div>
+            <div style="color:#6c757d">Текущий статус:</div>
+            <strong id="sch-status" style="color:#198754"></strong>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" onclick="closeModal('modal-staff-shift')">Закрыть</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 7. Гостевой счёт (Invoice) -->
+  <div id="modal-folio" class="modal-backdrop">
+    <div class="modal-box wide">
+      <div class="modal-header">
+        <h3>Счёт за проживание</h3>
+        <button class="modal-close-btn" onclick="closeModal('modal-folio')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="invoice-paper">
+          <div class="inv-header">
+            <div>
+              <div class="inv-hotel-name">Гостиничный комплекс «Отель-Сервис»</div>
+              <div class="inv-hotel-sub">г. Москва, ул. Центральная, д. 10 • Тел: +7 (495) 123-45-67</div>
+            </div>
+            <div style="text-align:right">
+              <div id="inv-code" style="font-size:16px; font-weight:bold; color:#0d6efd">INV-000000</div>
+              <div id="inv-date-val" style="font-size:12px; color:#6c757d">Дата: 2026-11-05</div>
+            </div>
+          </div>
+
+          <div class="inv-grid">
+            <div>
+              <div style="font-size:11px; text-transform:uppercase; color:#6c757d; font-weight:bold">Гость:</div>
+              <div id="inv-guest-name" style="font-size:14px; font-weight:bold; margin-top:2px">Иванов Иван</div>
+              <div id="inv-guest-passport" style="color:#495057; font-size:12px">Паспорт: 4510 123456</div>
+              <div id="inv-guest-phone" style="color:#495057; font-size:12px">Телефон: +7 (999) 000-00-00</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-size:11px; text-transform:uppercase; color:#6c757d; font-weight:bold">Параметры:</div>
+              <div id="inv-room-info" style="font-size:14px; font-weight:bold; margin-top:2px">Номер 101 (Стандарт)</div>
+              <div id="inv-dates-info" style="color:#495057; font-size:12px">2026-11-01 — 2026-11-08</div>
+              <div id="inv-rate-info" style="color:#495057; font-size:12px">Тариф: 3 500 ₽/сутки</div>
+            </div>
+          </div>
+
+          <table class="inv-table">
+            <thead>
+              <tr>
+                <th>Наименование услуги</th>
+                <th style="text-align:right">Сумма</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Проживание в номере выбранной категории</td>
+                <td style="text-align:right; font-weight:bold" id="inv-charge-total">35 000 ₽</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="inv-summary">
+            <div>Всего начислено: <strong id="inv-sum-total">35 000 ₽</strong></div>
+            <div>Оплачено: <strong id="inv-paid-sum">35 000 ₽</strong></div>
+            <div>Остаток к оплате: <strong id="inv-due-sum">0 ₽</strong></div>
+            <div style="margin-top:6px">
+              Статус оплаты: <span id="inv-status-label" class="badge badge-AVAILABLE">ОПЛАЧЕНО</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('modal-folio')">Закрыть</button>
+        <button class="btn btn-primary" onclick="window.print()">
+          Печать счёта
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 8. Прием оплаты -->
+  <div id="modal-add-payment" class="modal-backdrop">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>Регистрация платежа</h3>
+        <button class="modal-close-btn" onclick="closeModal('modal-add-payment')">&times;</button>
+      </div>
+      <form onsubmit="submitPayment(event)">
+        <div class="modal-body form-grid">
+          <div class="form-group full">
+            <label>Бронирование</label>
+            <select id="pay-booking-sel" class="form-control" required></select>
+          </div>
+          <div class="form-group">
+            <label>Сумма платежа (₽)</label>
+            <input type="number" id="pay-amount" class="form-control" min="1" step="50" required placeholder="5000">
+          </div>
+          <div class="form-group">
+            <label>Способ оплаты</label>
+            <select id="pay-method" class="form-control">
+              <option value="CARD">Банковская карта</option>
+              <option value="CASH">Наличный расчет</option>
+              <option value="TRANSFER">Безналичный перевод</option>
+            </select>
+          </div>
+          <div class="form-group full">
+            <label>Примечание</label>
+            <input type="text" id="pay-desc" class="form-control" value="Оплата проживания" placeholder="Оплата проживания, услуги">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('modal-add-payment')">Отмена</button>
+          <button type="submit" class="btn btn-primary">Провести платеж</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Контейнер простых уведомлений -->
+  <div id="toast-rack" class="toast-rack"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
