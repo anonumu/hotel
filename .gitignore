@@ -4,11 +4,9 @@
 *.iml
 *.iws
 
-# Maven и артефакты сборки
+# Артефакты компиляции
 target/
 **/target/
-hotel-backend/target/
-hotel-backend/maven/
 
 # Логи и временные файлы ОС
 *.log
