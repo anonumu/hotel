@@ -843,32 +843,57 @@ async function renderDashboard() {
   const occupied = rooms.filter(r => r.status === 'OCCUPIED').length;
   const available = rooms.filter(r => r.status === 'AVAILABLE').length;
   const cleaning = rooms.filter(r => r.status === 'CLEANING').length;
+  const repair = rooms.filter(r => r.status === 'OUT_OF_ORDER').length;
   const rate = total > 0 ? Math.round((occupied / total) * 100) : 0;
 
+  // 1. Загрузка фонда
   const rateEl = document.getElementById('dash-kpi-rate');
   if (rateEl) rateEl.innerText = `${rate}%`;
 
-  const availEl = document.getElementById('dash-kpi-avail');
-  if (availEl) availEl.innerText = available;
+  const occMetaEl = document.getElementById('dash-kpi-occ-meta');
+  if (occMetaEl) occMetaEl.innerText = `${occupied} из ${total} номеров занято`;
 
-  const cleanEl = document.getElementById('dash-kpi-clean');
-  if (cleanEl) cleanEl.innerText = cleaning;
+  const occBarEl = document.getElementById('dash-kpi-occ-bar');
+  if (occBarEl) occBarEl.style.width = `${rate}%`;
 
+  // 2. Выручка
   const revEl = document.getElementById('dash-kpi-rev');
   if (revEl) revEl.innerText = formatRub(rev?.totalRevenue || 0);
 
-  // Средний срок проживания и касса в Bento карточках
-  const validBookings = globalBookingsCache.filter(b => b.status !== 'CANCELLED');
-  let avgNights = 3.4;
-  if (validBookings.length > 0) {
-    const totalNights = validBookings.reduce((sum, b) => sum + calculateNights(b.checkInDate, b.checkOutDate), 0);
-    avgNights = (totalNights / validBookings.length).toFixed(1);
-  }
-  const stayEl = document.getElementById('dash-kpi-stay');
-  if (stayEl) stayEl.innerText = `${avgNights} дня`;
+  const txCount = rev?.totalPaymentsCount ?? rev?.totalTransactions ?? 0;
+  const txEl = document.getElementById('dash-kpi-tx-count');
+  if (txEl) txEl.innerText = `${txCount} платежей в кассе`;
 
-  const cashEl = document.getElementById('dash-kpi-cash');
-  if (cashEl) cashEl.innerText = formatRub(rev?.totalRevenue || 0);
+  const byMethod = rev?.revenueByPaymentMethod || rev?.revenueByMethod || {};
+  const cardVal = Number(byMethod.CARD || byMethod.card || 0);
+  const cashVal = Number(byMethod.CASH || byMethod.cash || 0);
+
+  const cardEl = document.getElementById('dash-kpi-card-val');
+  if (cardEl) cardEl.innerText = `Карта: ${formatRub(cardVal)}`;
+
+  const cashMetaEl = document.getElementById('dash-kpi-cash-val');
+  if (cashMetaEl) cashMetaEl.innerText = `Нал: ${formatRub(cashVal)}`;
+
+  // 3. Средний срок проживания (Finnova Card 3)
+  const completedOrActive = (bookings || []).filter(b => b.checkInDate && b.checkOutDate);
+  let avgStay = 3.4;
+  if (completedOrActive.length > 0) {
+    const totalNights = completedOrActive.reduce((sum, b) => sum + calculateNights(b.checkInDate, b.checkOutDate), 0);
+    avgStay = (totalNights / completedOrActive.length).toFixed(1);
+  }
+  const avgStayEl = document.getElementById('dash-kpi-avg-stay');
+  if (avgStayEl) avgStayEl.innerText = `${avgStay} ноч.`;
+
+  // 4. Свободные номера (Finnova Card 4)
+  const availEl = document.getElementById('dash-kpi-avail');
+  if (availEl) availEl.innerText = `${available} ном.`;
+
+  // 5. Служебный фонд
+  const cleanEl = document.getElementById('dash-kpi-clean');
+  if (cleanEl) cleanEl.innerText = cleaning + repair;
+
+  const servMetaEl = document.getElementById('dash-kpi-service-meta');
+  if (servMetaEl) servMetaEl.innerText = `${cleaning} на уборке • ${repair} на ремонте`;
 
   // Отрисовка флагманского темного кокпита (Dual-Pane Master-Detail)
   renderDashboardCockpit();
@@ -904,8 +929,8 @@ function renderDashboardCockpit() {
   if (countEl) countEl.innerText = activeBooks.length;
 
   if (activeBooks.length === 0) {
-    listEl.innerHTML = '<div style="color:#64748b; padding:24px; text-align:center; font-size:13px">В данной категории бронирований нет</div>';
-    detailEl.innerHTML = '<div style="color:#c7d2fe; padding:32px; text-align:center; font-size:14px">Выберите бронирование для просмотра деталей</div>';
+    listEl.innerHTML = '<div style="color:var(--slate-400); padding:24px; text-align:center; font-size:13px">В данной категории бронирований нет</div>';
+    detailEl.innerHTML = '<div style="color:var(--slate-400); padding:32px; text-align:center; font-size:14px">Выберите бронирование для просмотра деталей</div>';
     return;
   }
 
@@ -921,11 +946,12 @@ function renderDashboardCockpit() {
     const guest = b.guest || globalGuestsCache.find(g => g.id === (b.guestId || b.guest_id || (b.guest && b.guest.id)));
     const guestName = guest ? `${guest.firstName} ${guest.lastName}` : `Гость #${b.id}`;
     const initials = guest ? `${guest.firstName[0] || ''}${guest.lastName[0] || ''}` : 'Г';
+    const room = globalRoomsCache.find(r => r.id === (b.roomId || b.room_id || (b.room && b.room.id)));
     const statusLabel = LABELS.bookingStatuses[b.status] || b.status;
     const nights = calculateNights(b.checkInDate, b.checkOutDate);
 
     // Относительные дни
-    let relativeText = `Срок: ${nights} ноч.`;
+    let relativeText = `${nights} ноч.`;
     if (b.status === 'CHECKED_IN') {
       const remaining = calculateNights(today, b.checkOutDate);
       relativeText = remaining === 0 ? 'Выезд сегодня' : (remaining > 0 ? `Осталось ${remaining} ноч.` : 'Просрочено');
@@ -940,7 +966,7 @@ function renderDashboardCockpit() {
       <div class="cockpit-item ${isSelected ? 'selected' : ''}" onclick="selectCockpitBooking(${b.id})">
         <div class="cockpit-avatar">${initials}</div>
         <div class="cockpit-item-info">
-          <div class="cockpit-item-title"># BOOK-${b.id}</div>
+          <div class="cockpit-item-title"># БРОНЬ-${b.id} • ${room ? `№ ${room.roomNumber}` : 'Номер не назначен'}</div>
           <div class="cockpit-item-sub">${escapeHtml(guestName)} • ${relativeText}</div>
         </div>
         <div class="cockpit-item-status status-${b.status.toLowerCase()}">${statusLabel}</div>
@@ -969,36 +995,36 @@ function renderDashboardCockpit() {
           <span style="font-size:12px; opacity:0.8">Детали бронирования:</span>
           <span class="cockpit-status-chip">${statusLabel}</span>
         </div>
-        <div class="cockpit-detail-h1"># BOOK-${selBook.id}</div>
+        <div class="cockpit-detail-h1"># БРОНЬ-${selBook.id}</div>
       </div>
       <div class="cockpit-detail-brand">
         <div class="cockpit-brand-pill">
-          <span class="gold-sparkle">⚜️</span> Grand Impérial
+          GRAND IMPÉRIAL PMS
         </div>
       </div>
       <div class="cockpit-guest-badge">
-        <div class="cockpit-avatar light">${guestInitials}</div>
+        <div class="cockpit-avatar">${guestInitials}</div>
         <div>
-          <div style="font-weight:700; font-size:13.5px">${escapeHtml(selGuest ? `${selGuest.firstName} ${selGuest.lastName}` : 'Гость комплекса')}</div>
-          <div style="font-size:11.5px; opacity:0.85">${selRoom ? `Номер №${selRoom.roomNumber} (${LABELS.types[selRoom.type] || selRoom.type})` : 'Номер не назначен'}</div>
+          <div style="font-weight:700; font-size:13px">${escapeHtml(selGuest ? `${selGuest.firstName} ${selGuest.lastName}` : 'Гость комплекса')}</div>
+          <div style="font-size:11px; opacity:0.8">${selRoom ? `№ ${selRoom.roomNumber} (${LABELS.types[selRoom.type] || selRoom.type})` : 'Номер не назначен'}</div>
         </div>
       </div>
     </div>
 
     <div class="cockpit-detail-subcards">
       <div class="cockpit-subcard">
-        <div class="cockpit-subcard-sum">${formatRub(stayCost)} <span class="arrow-up-right">↗</span></div>
+        <div class="cockpit-subcard-sum">${formatRub(stayCost)}</div>
         <div class="cockpit-subcard-label">Тариф номера (${nights} ноч.)</div>
         <div class="cockpit-subcard-date">${selBook.checkInDate} &rarr; ${selBook.checkOutDate}</div>
       </div>
       <div class="cockpit-subcard">
-        <div class="cockpit-subcard-sum">${selRoom ? `№ ${selRoom.roomNumber}` : '—'} <span class="arrow-up-right">↗</span></div>
+        <div class="cockpit-subcard-sum">${selRoom ? `№ ${selRoom.roomNumber}` : '—'}</div>
         <div class="cockpit-subcard-label">${selRoom ? `${LABELS.types[selRoom.type] || selRoom.type} • ${selRoom.floor} этаж` : 'Категория'}</div>
         <div class="cockpit-subcard-date">до ${selRoom ? selRoom.maxGuests : 2} гостей</div>
       </div>
       <div class="cockpit-subcard">
-        <div class="cockpit-subcard-sum">${formatRub(extraServices)} <span class="arrow-up-right">↗</span></div>
-        <div class="cockpit-subcard-label">СПА, бар и доп. услуги</div>
+        <div class="cockpit-subcard-sum">${formatRub(extraServices)}</div>
+        <div class="cockpit-subcard-label">Питание и обслуживание</div>
         <div class="cockpit-subcard-date">Включено в счёт</div>
       </div>
       <div class="cockpit-subcard dashed" onclick="openPaymentWithBooking(${selBook.id})">
@@ -1009,27 +1035,24 @@ function renderDashboardCockpit() {
 
     <div class="cockpit-detail-footer">
       <div class="cockpit-footer-col">
-        <span class="foot-label">Промежуточный итог</span>
-        <span class="foot-val">${formatRub(selBook.totalPrice)}</span>
+        <span class="foot-label">Тариф проживания</span>
+        <span class="foot-val">${formatRub(stayCost)}</span>
       </div>
       <div class="cockpit-footer-col">
         <span class="foot-label">Итого к оплате</span>
-        <span class="foot-val" style="font-size:17px; font-weight:800">${formatRub(selBook.totalPrice)}</span>
+        <span class="foot-val">${formatRub(selBook.totalPrice)}</span>
       </div>
       <div class="cockpit-footer-col">
-        <span class="foot-label">Баланс долга</span>
-        <span class="foot-val" style="color:#bbf7d0">${selBook.status === 'CHECKED_IN' ? '0 ₽ (Оплачено)' : formatRub(selBook.totalPrice)}</span>
+        <span class="foot-label">Статус оплаты</span>
+        <span class="foot-val" style="color:${selBook.status === 'CHECKED_IN' ? '#6ee7b7' : '#fde68a'}">${selBook.status === 'CHECKED_IN' ? 'Оплачено (Баланс 0 ₽)' : formatRub(selBook.totalPrice)}</span>
       </div>
 
       <div class="cockpit-footer-actions">
-        <button class="cockpit-icon-btn" title="Печать счёта (Folio)" onclick="openInvoiceSheet(${selBook.id})">
-          📄
-        </button>
-        <button class="cockpit-icon-btn" title="Календарь дат" onclick="navigateTo('bookings')">
-          📅
+        <button class="cockpit-icon-btn" title="Печать счёта-квитанции" onclick="openInvoiceSheet(${selBook.id})">
+          Печать квитанции
         </button>
         <button class="cockpit-primary-white-btn" onclick="openInvoiceSheet(${selBook.id})">
-          Открыть счёт / Чек
+          Счёт (Folio)
         </button>
       </div>
     </div>
@@ -1565,6 +1588,55 @@ async function renderBookings() {
   }
 }
 
+// ==========================================================================
+// ДИНАМИЧЕСКАЯ ФИЛЬТРАЦИЯ НОМЕРОВ ПО ДАТАМ И ПРОВЕРКА ЗАНЯТОСТИ
+// ==========================================================================
+function updateRoomOptionsForDates(checkIn, checkOut, selectId = 'newbook-room') {
+  const rSel = document.getElementById(selectId);
+  if (!rSel || !globalRoomsCache || globalRoomsCache.length === 0) return;
+
+  const currentVal = parseInt(rSel.value);
+  let firstAvailableId = null;
+
+  rSel.innerHTML = globalRoomsCache.map(r => {
+    // 1. Проверяем статус техобслуживания / ремонта
+    if (r.status === 'OUT_OF_ORDER') {
+      return `<option value="${r.id}" disabled style="color:#94a3b8">№ ${r.roomNumber} (${LABELS.types[r.type] || r.type}) — [Недоступен: Ремонт]</option>`;
+    }
+
+    // 2. Проверяем наложение дат с активными бронями
+    const hasConflict = globalBookingsCache.some(b => {
+      if (b.status === 'CANCELLED' || b.status === 'CHECKED_OUT') return false;
+      const bRoomId = b.roomId || (b.room && b.room.id);
+      if (bRoomId !== r.id) return false;
+      return (checkIn < b.checkOutDate && checkOut > b.checkInDate);
+    });
+
+    if (hasConflict) {
+      return `<option value="${r.id}" disabled style="color:#ef4444">№ ${r.roomNumber} (${LABELS.types[r.type] || r.type}) — [Занят на выбранные даты]</option>`;
+    }
+
+    // 3. Проверяем текущее проживание (если заезд сегодня/раньше)
+    const today = new Date().toISOString().split('T')[0];
+    if (r.status === 'OCCUPIED' && checkIn <= today) {
+      return `<option value="${r.id}" disabled style="color:#ef4444">№ ${r.roomNumber} (${LABELS.types[r.type] || r.type}) — [Занят постояльцем]</option>`;
+    }
+
+    // 4. Свободный номер
+    if (!firstAvailableId) firstAvailableId = r.id;
+    const isSelected = r.id === currentVal ? 'selected' : '';
+    return `<option value="${r.id}" data-price="${r.pricePerNight}" ${isSelected}>№ ${r.roomNumber} (${LABELS.types[r.type] || r.type}) — ${formatRub(r.pricePerNight)}/сут. [Свободен]</option>`;
+  }).join('');
+
+  // Если выбранный номер теперь отключен, автоматически выбираем первый доступный
+  const currentOption = rSel.querySelector(`option[value="${currentVal}"]`);
+  if (!currentOption || currentOption.disabled) {
+    if (firstAvailableId) {
+      rSel.value = firstAvailableId;
+    }
+  }
+}
+
 // Интерактивное управление ночами и датами в окне бронирования
 function onBookingNightsChange() {
   const nightsInput = document.getElementById('newbook-nights');
@@ -1576,6 +1648,8 @@ function onBookingNightsChange() {
   const outDate = new Date(inDate);
   outDate.setDate(inDate.getDate() + nights);
   if (outInput) outInput.value = outDate.toISOString().split('T')[0];
+
+  updateRoomOptionsForDates(inInput.value, outInput.value, 'newbook-room');
   recalculateBookingSummary();
 }
 
@@ -1589,6 +1663,8 @@ function onBookingCheckInDateChange() {
   const outDate = new Date(inDate);
   outDate.setDate(inDate.getDate() + nights);
   if (outInput) outInput.value = outDate.toISOString().split('T')[0];
+
+  updateRoomOptionsForDates(inInput.value, outInput.value, 'newbook-room');
   recalculateBookingSummary();
 }
 
@@ -1603,27 +1679,53 @@ function onBookingCheckOutDateChange() {
     const nights = Math.max(1, Math.ceil((outDate - inDate) / (1000 * 60 * 60 * 24)));
     if (nightsInput) nightsInput.value = nights;
   }
+  updateRoomOptionsForDates(inInput.value, outInput.value, 'newbook-room');
   recalculateBookingSummary();
 }
 
 function recalculateBookingSummary() {
-  const roomSelect = document.getElementById('newbook-room');
-  const selectedOption = roomSelect?.selectedOptions[0];
-  const summaryBox = document.getElementById('newbook-calc-summary');
-  if (!summaryBox || !selectedOption) return;
+  const inInput = document.getElementById('newbook-checkin');
+  const outInput = document.getElementById('newbook-checkout');
+  const nightsInput = document.getElementById('newbook-nights');
+  const rSel = document.getElementById('newbook-room');
 
-  const roomId = parseInt(selectedOption.value);
-  const room = globalRoomsCache.find(r => r.id === roomId);
-  const inDateStr = document.getElementById('newbook-checkin')?.value;
-  const outDateStr = document.getElementById('newbook-checkout')?.value;
+  if (!inInput || !outInput) return;
+
+  const inDateStr = inInput.value;
+  const outDateStr = outInput.value;
   const nights = calculateNights(inDateStr, outDateStr);
 
-  if (!room) {
-    summaryBox.innerHTML = 'Выберите номер для расчета стоимости';
+  const rateEl = document.getElementById('newbook-calc-rate');
+  const nightsEl = document.getElementById('newbook-calc-nights');
+  const datesEl = document.getElementById('newbook-calc-dates');
+  const totalEl = document.getElementById('newbook-calc-total');
+  const badgeEl = document.getElementById('newbook-status-badge');
+  const submitBtn = document.getElementById('add-booking-submit-btn');
+
+  if (datesEl) datesEl.innerText = `${inDateStr || '—'} — ${outDateStr || '—'}`;
+  if (nightsEl) nightsEl.innerText = `${nights} ноч.`;
+
+  const selectedOption = rSel?.selectedOptions[0];
+  const roomId = parseInt(rSel?.value);
+  const room = globalRoomsCache.find(r => r.id === roomId);
+
+  if (!room || !selectedOption || selectedOption.disabled) {
+    if (rateEl) rateEl.innerText = '—';
+    if (totalEl) totalEl.innerText = '—';
+    if (badgeEl) {
+      badgeEl.className = 'calc-status-badge conflict';
+      badgeEl.innerHTML = '&times; Выберите доступный свободный номер';
+    }
+    if (submitBtn) submitBtn.disabled = true;
     return;
   }
 
-  // Проверка наложения с существующими активными бронями для этого номера
+  const pricePerNight = room.pricePerNight || 0;
+  const total = nights * pricePerNight;
+  if (rateEl) rateEl.innerText = `${formatRub(pricePerNight)}/сут.`;
+  if (totalEl) totalEl.innerText = formatRub(total);
+
+  // Проверка конфликта
   const hasConflict = globalBookingsCache.some(b => {
     if (b.status === 'CANCELLED' || b.status === 'CHECKED_OUT') return false;
     const bRoomId = b.roomId || (b.room && b.room.id);
@@ -1631,17 +1733,18 @@ function recalculateBookingSummary() {
     return (inDateStr < b.checkOutDate && outDateStr > b.checkInDate);
   });
 
-  const total = nights * (room.pricePerNight || 0);
-  if (hasConflict) {
-    summaryBox.innerHTML = `
-      <span style="color:#b91c1c; font-weight:700">Внимание: Номер ${room.roomNumber} уже занят на эти даты!</span>
-      <div style="font-size:11.5px; color:#7f1d1d; margin-top:2px">Выберите другой свободный номер или измените даты заезда/выезда.</div>
-    `;
+  if (hasConflict || room.status === 'OUT_OF_ORDER') {
+    if (badgeEl) {
+      badgeEl.className = 'calc-status-badge conflict';
+      badgeEl.innerHTML = `&times; Номер № ${room.roomNumber} занят на эти даты! Пожалуйста, выберите другой номер.`;
+    }
+    if (submitBtn) submitBtn.disabled = true;
   } else {
-    summaryBox.innerHTML = `
-      Расчёт: <strong>${nights} ноч.</strong> &times; ${formatRub(room.pricePerNight)}/сут. = <strong>${formatRub(total)}</strong>
-      <span style="color:#276738; margin-left:8px; font-weight:700">&#10003; Номер свободен на выбранный период</span>
-    `;
+    if (badgeEl) {
+      badgeEl.className = 'calc-status-badge available';
+      badgeEl.innerHTML = `&check; Номер № ${room.roomNumber} (${LABELS.types[room.type] || room.type}) свободен на весь период!`;
+    }
+    if (submitBtn) submitBtn.disabled = false;
   }
 }
 
@@ -1658,20 +1761,7 @@ async function populateBookingSelects() {
     if (guests) globalGuestsCache = guests;
     if (bookings) globalBookingsCache = bookings;
 
-    const rSel = document.getElementById('newbook-room');
     const gSel = document.getElementById('newbook-guest');
-
-    if (rSel && rooms) {
-      rSel.innerHTML = rooms.map(r => {
-        let statusText = LABELS.roomStatuses[r.status] || r.status;
-        return `
-          <option value="${r.id}" data-price="${r.pricePerNight}">
-            № ${r.roomNumber} (${LABELS.types[r.type] || r.type}) — ${formatRub(r.pricePerNight)}/сут. [${statusText}]
-          </option>
-        `;
-      }).join('');
-    }
-
     if (gSel && guests) {
       gSel.innerHTML = guests.map(g => `
         <option value="${g.id}">
@@ -1695,6 +1785,8 @@ async function populateBookingSelects() {
     if (nightsEl && !nightsEl.value) nightsEl.value = nights;
     if (outEl && !outEl.value) outEl.value = outDateStr;
 
+    // Первичное наполнение с проверкой доступности
+    updateRoomOptionsForDates(inEl.value, outEl.value, 'newbook-room');
     recalculateBookingSummary();
   } catch (e) {
     console.warn('Ошибка списков бронирования:', e);
@@ -1835,22 +1927,10 @@ function openQuickCheckInModal(guestId) {
   const guest = globalGuestsCache.find(g => g.id === guestId);
   if (!guest) return;
 
-  document.getElementById('checkin-guest-id').value = guestId;
-  document.getElementById('checkin-guest-name-box').innerText = `${guest.firstName} ${guest.lastName} (паспорт: ${guest.passportNumber})`;
-
-  // Заполняем выпадающий список только СВОБОДНЫМИ номерами
-  const roomSelect = document.getElementById('checkin-room-select');
-  const availableRooms = globalRoomsCache.filter(r => r.status === 'AVAILABLE');
-
-  if (availableRooms.length === 0) {
-    roomSelect.innerHTML = '<option value="">Нет свободных номеров для заселения</option>';
-  } else {
-    roomSelect.innerHTML = availableRooms.map(r => `
-      <option value="${r.id}" data-price="${r.pricePerNight}">
-        Номер № ${r.roomNumber} (${LABELS.types[r.type] || r.type}) • ${r.floor} этаж • ${formatRub(r.pricePerNight)}/сут.
-      </option>
-    `).join('');
-  }
+  const idInput = document.getElementById('checkin-guest-id');
+  const nameInput = document.getElementById('checkin-guest-name');
+  if (idInput) idInput.value = guestId;
+  if (nameInput) nameInput.value = `${guest.firstName} ${guest.lastName} (паспорт: ${guest.passportNumber})`;
 
   // Задаем даты и ночи
   const today = new Date();
@@ -1860,12 +1940,15 @@ function openQuickCheckInModal(guestId) {
   outDate.setDate(today.getDate() + nights);
   const dateOutStr = outDate.toISOString().split('T')[0];
 
+  const inInput = document.getElementById('checkin-date');
+  const outInput = document.getElementById('checkin-checkout-date');
   const nightsInput = document.getElementById('checkin-nights');
+
+  if (inInput) inInput.value = dateInStr;
+  if (outInput) outInput.value = dateOutStr;
   if (nightsInput) nightsInput.value = nights;
 
-  document.getElementById('checkin-date-in').value = dateInStr;
-  document.getElementById('checkin-date-out').value = dateOutStr;
-
+  updateRoomOptionsForDates(dateInStr, dateOutStr, 'checkin-room-select');
   recalculateCheckInSummary();
   clearModalAlert('modal-quick-checkin');
   openModal('modal-quick-checkin');
@@ -1874,33 +1957,37 @@ function openQuickCheckInModal(guestId) {
 // Интерактивное управление датами и ночами в окне быстрого заселения
 function onQuickCheckInNightsInput() {
   const nightsInput = document.getElementById('checkin-nights');
-  const inInput = document.getElementById('checkin-date-in');
-  const outInput = document.getElementById('checkin-date-out');
+  const inInput = document.getElementById('checkin-date');
+  const outInput = document.getElementById('checkin-checkout-date');
   const nights = parseInt(nightsInput?.value) || 1;
   const inDate = inInput?.value ? new Date(inInput.value) : new Date();
 
   const outDate = new Date(inDate);
   outDate.setDate(inDate.getDate() + nights);
   if (outInput) outInput.value = outDate.toISOString().split('T')[0];
+
+  updateRoomOptionsForDates(inInput.value, outInput.value, 'checkin-room-select');
   recalculateCheckInSummary();
 }
 
 function onQuickCheckInDateChange() {
   const nightsInput = document.getElementById('checkin-nights');
-  const inInput = document.getElementById('checkin-date-in');
-  const outInput = document.getElementById('checkin-date-out');
+  const inInput = document.getElementById('checkin-date');
+  const outInput = document.getElementById('checkin-checkout-date');
   const nights = parseInt(nightsInput?.value) || 1;
   const inDate = inInput?.value ? new Date(inInput.value) : new Date();
 
   const outDate = new Date(inDate);
   outDate.setDate(inDate.getDate() + nights);
   if (outInput) outInput.value = outDate.toISOString().split('T')[0];
+
+  updateRoomOptionsForDates(inInput.value, outInput.value, 'checkin-room-select');
   recalculateCheckInSummary();
 }
 
 function onQuickCheckInOutDateChange() {
-  const inInput = document.getElementById('checkin-date-in');
-  const outInput = document.getElementById('checkin-date-out');
+  const inInput = document.getElementById('checkin-date');
+  const outInput = document.getElementById('checkin-checkout-date');
   const nightsInput = document.getElementById('checkin-nights');
   const inDate = new Date(inInput?.value);
   const outDate = new Date(outInput?.value);
@@ -1909,6 +1996,7 @@ function onQuickCheckInOutDateChange() {
     const nights = Math.max(1, Math.ceil((outDate - inDate) / (1000 * 60 * 60 * 24)));
     if (nightsInput) nightsInput.value = nights;
   }
+  updateRoomOptionsForDates(inInput.value, outInput.value, 'checkin-room-select');
   recalculateCheckInSummary();
 }
 
@@ -1916,25 +2004,48 @@ function onQuickCheckInOutDateChange() {
 function recalculateCheckInSummary() {
   const roomSelect = document.getElementById('checkin-room-select');
   const selectedOption = roomSelect?.selectedOptions[0];
-  const summaryBox = document.getElementById('checkin-calc-summary');
-  if (!summaryBox || !selectedOption || !selectedOption.value) {
-    if (summaryBox) summaryBox.innerText = 'Выберите номер для расчета стоимости';
+  const roomId = parseInt(roomSelect?.value);
+  const room = globalRoomsCache.find(r => r.id === roomId);
+
+  const inInput = document.getElementById('checkin-date');
+  const outInput = document.getElementById('checkin-checkout-date');
+  const nightsInput = document.getElementById('checkin-nights');
+
+  const inDateStr = inInput?.value;
+  const outDateStr = outInput?.value;
+  const nights = parseInt(nightsInput?.value) || calculateNights(inDateStr, outDateStr);
+
+  const rateEl = document.getElementById('checkin-summary-rate');
+  const nightsEl = document.getElementById('checkin-summary-nights');
+  const datesEl = document.getElementById('checkin-summary-dates');
+  const totalEl = document.getElementById('checkin-summary-total');
+  const badgeEl = document.getElementById('checkin-status-badge');
+  const submitBtn = document.getElementById('checkin-submit-btn');
+
+  if (datesEl) datesEl.innerText = `${inDateStr || '—'} — ${outDateStr || '—'}`;
+  if (nightsEl) nightsEl.innerText = `${nights} ноч.`;
+
+  if (!room || !selectedOption || selectedOption.disabled) {
+    if (rateEl) rateEl.innerText = '—';
+    if (totalEl) totalEl.innerText = '—';
+    if (badgeEl) {
+      badgeEl.className = 'calc-status-badge conflict';
+      badgeEl.innerHTML = '&times; Выберите доступный свободный номер';
+    }
+    if (submitBtn) submitBtn.disabled = true;
     return;
   }
 
-  const pricePerNight = parseFloat(selectedOption.dataset.price) || 0;
-  const dateInStr = document.getElementById('checkin-date-in')?.value;
-  const dateOutStr = document.getElementById('checkin-date-out')?.value;
-  const nightsInput = document.getElementById('checkin-nights');
-  const nights = parseInt(nightsInput?.value) || calculateNights(dateInStr, dateOutStr);
-
+  const pricePerNight = room.pricePerNight || 0;
   const total = nights * pricePerNight;
-  summaryBox.innerHTML = `
-    Расчёт: <strong>${nights} суток</strong> &times; ${formatRub(pricePerNight)}/сут. = <strong>${formatRub(total)}</strong>
-    <div style="font-size:11.5px; color:var(--text-secondary); margin-top:2px">
-      Заезд: <strong>${dateInStr}</strong> &bull; Выезд: <strong>${dateOutStr}</strong> (останется: ${nights} ноч.)
-    </div>
-  `;
+  if (rateEl) rateEl.innerText = `${formatRub(pricePerNight)}/сут.`;
+  if (totalEl) totalEl.innerText = formatRub(total);
+
+  if (badgeEl) {
+    badgeEl.className = 'calc-status-badge available';
+    badgeEl.innerHTML = `&check; Номер № ${room.roomNumber} (${LABELS.types[room.type] || room.type}) готов к заселению на ${nights} ноч.!`;
+  }
+  if (submitBtn) submitBtn.disabled = false;
 }
 
 // Отправка быстрого заселения
