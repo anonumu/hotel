@@ -137,20 +137,18 @@ public class RoomService {
         return roomRepository.save(room);
     }
 
-    // Удаление номера с безопасной проверкой связей
+    // Удаление номера с безопасной очисткой связей
+    @Transactional
     public void deleteRoom(Long id) {
         Room room = getRoomById(id);
+        if (room.getStatus() == RoomStatus.OCCUPIED) {
+            throw new BusinessLogicException("Нельзя удалить номер № " + room.getRoomNumber() + 
+                    ", так как в нём сейчас проживает гость. Сначала оформите выселение гостя в службе приема.");
+        }
+
         List<Booking> bookings = bookingRepository.findByRoomId(id);
         if (!bookings.isEmpty()) {
-            long activeCount = bookings.stream()
-                    .filter(b -> b.getStatus() != BookingStatus.CANCELLED && b.getStatus() != BookingStatus.CHECKED_OUT)
-                    .count();
-            if (activeCount > 0) {
-                throw new BusinessLogicException("Нельзя удалить номер № " + room.getRoomNumber() + 
-                        ", так как в нём сейчас проживают гости или оформлена активная бронь (" + activeCount + " шт.). Сначала выселите гостя или отмените бронь.");
-            }
-            // Если все бронирования по номеру уже завершены (CHECKED_OUT) или отменены (CANCELLED),
-            // удаляем архивные бронирования и их платежи, чтобы номер можно было удалить
+            // Удаляем связанные бронирования и их платежи, чтобы номер можно было удалить без ошибок БД
             for (Booking b : bookings) {
                 List<Payment> payments = paymentRepository.findByBookingId(b.getId());
                 if (!payments.isEmpty()) {

@@ -107,19 +107,24 @@ function escapeHtml(str) {
 let stressOverlayActive = false;
 const apiCallHistory = [];
 
-function checkFloodProtection() {
+function checkFloodProtection(method = 'GET') {
+  // Штатные GET-запросы на чтение и отрисовку представлений никогда не блокируются
+  if (method === 'GET') {
+    return true;
+  }
+
   const now = Date.now();
-  apiCallHistory.push(now);
-  while (apiCallHistory.length && apiCallHistory[0] < now - 2000) {
+  apiCallHistory.push({ time: now, method });
+  while (apiCallHistory.length && apiCallHistory[0].time < now - 2000) {
     apiCallHistory.shift();
   }
-  // Порог защиты от флуда поднят до 45 запросов за 2 секунды (настоящая DDOS / стресс-атака циклами),
-  // чтобы штатная параллельная загрузка представлений (10-15 запросов) не блокировала работу оператора!
-  if (apiCallHistory.length > 45) {
+
+  // Защита срабатывает только при скриптовом флуде запросами на запись/удаление (> 25 мутаций за 2 сек)
+  if (apiCallHistory.length > 25) {
     triggerSamsonovStressOverlay({
       code: 'ERR_DATABASE_OVERLOAD_FLOOD_429',
       source: 'Стресс-тестирование базы данных (Шквал одновременных запросов)',
-      reason: `Зафиксировано ${apiCallHistory.length} запросов к REST API за 2 секунды. Сработал предохранитель базы данных от перегрузки пула соединений.`,
+      reason: `Зафиксировано ${apiCallHistory.length} мутаций REST API за 2 секунды. Сработал предохранитель базы данных от перегрузки пула соединений.`,
       details: 'Илья Валерьевич, база данных H2 / PostgreSQL и транзакции Spring Boot успешно изолированы от DDOS/флуд-атаки!'
     });
     return false;
@@ -150,7 +155,7 @@ function dismissStressOverlay() {
   const overlay = document.getElementById('samsonov-stress-screen');
   if (overlay) overlay.style.display = 'none';
   stressOverlayActive = false;
-  apiCallHistory.length = 0; // Сбрасываем историю вызовов
+  apiCallHistory.length = 0; // Полный сброс счетчика вызовов
   document.body.style.overflow = '';
 
   // Сброс потенциально экстремальных значений в полях ввода
@@ -248,7 +253,8 @@ function syncServerStatus(online) {
 
 // Запросы к REST API с защитой от сбоев и активным перехватом стресс-тестирования
 async function api(endpoint, options = {}) {
-  if (!checkFloodProtection()) {
+  const method = (options.method || 'GET').toUpperCase();
+  if (!checkFloodProtection(method)) {
     throw new Error('Илья Валерьевич, перестаньте насиловать мой проект (перегрузка базы данных)');
   }
 
@@ -398,9 +404,8 @@ function mockApi(endpoint, options = {}) {
         return room;
       }
       if (method === 'DELETE') {
-        const activeBookings = store.bookings.filter(b => b.roomId === id && b.status !== 'CANCELLED' && b.status !== 'CHECKED_OUT');
-        if (activeBookings.length > 0) {
-          throw new Error(`Нельзя удалить номер № ${room ? room.roomNumber : id}, так как в нём сейчас проживают гости или оформлена активная бронь (${activeBookings.length} шт.).`);
+        if (room && room.status === 'OCCUPIED') {
+          throw new Error(`Нельзя удалить номер № ${room.roomNumber}, так как в нём сейчас проживает гость. Сначала оформите выселение в службе приема.`);
         }
         store.bookings = store.bookings.filter(b => b.roomId !== id);
         store.rooms = store.rooms.filter(r => r.id !== id);
@@ -1397,8 +1402,8 @@ function renderCurrentOccupantsTable() {
 // ==========================================================================
 // 2. НОМЕРНОЙ ФОНД
 // ==========================================================================
-async function renderRooms() {
-  const rooms = await api('/rooms');
+async function renderRooms(cachedRooms) {
+  const rooms = cachedRooms || await api('/rooms');
   if (!rooms) return;
   globalRoomsCache = rooms;
   updateNavCounts({ rooms: rooms.length });
@@ -1513,10 +1518,10 @@ async function refreshAllViews() {
 
     await Promise.all([
       renderDashboard(),
-      renderRooms(),
-      renderBookings(),
-      renderGuests(),
-      populateBookingSelects()
+      renderRooms(rooms),
+      renderBookings(bookings, rooms, guests),
+      renderGuests(guests, bookings, rooms),
+      populateBookingSelects(rooms, guests, bookings)
     ]);
   } catch (e) {
     console.warn('Ошибка синхронизации представлений:', e);
@@ -1526,12 +1531,14 @@ async function refreshAllViews() {
 // ==========================================================================
 // 3. БРОНИРОВАНИЯ
 // ==========================================================================
-async function renderBookings() {
-  const [books, rooms, guests] = await Promise.all([
-    api('/bookings'),
-    api('/rooms'),
-    api('/guests')
-  ]);
+async function renderBookings(cachedBooks, cachedRooms, cachedGuests) {
+  const [books, rooms, guests] = (cachedBooks && cachedRooms && cachedGuests)
+    ? [cachedBooks, cachedRooms, cachedGuests]
+    : await Promise.all([
+      api('/bookings'),
+      api('/rooms'),
+      api('/guests')
+    ]);
 
   if (!books) return;
   globalBookingsCache = books;
@@ -1753,13 +1760,15 @@ function recalculateBookingSummary() {
 }
 
 // Заполнение выпадающих списков при создании брони с актуальными статусами
-async function populateBookingSelects() {
+async function populateBookingSelects(cachedRooms, cachedGuests, cachedBookings) {
   try {
-    const [rooms, guests, bookings] = await Promise.all([
-      api('/rooms'),
-      api('/guests'),
-      api('/bookings')
-    ]);
+    const [rooms, guests, bookings] = (cachedRooms && cachedGuests && cachedBookings)
+      ? [cachedRooms, cachedGuests, cachedBookings]
+      : await Promise.all([
+        api('/rooms'),
+        api('/guests'),
+        api('/bookings')
+      ]);
 
     if (rooms) globalRoomsCache = rooms;
     if (guests) globalGuestsCache = guests;
@@ -1811,12 +1820,14 @@ async function openBookingWithRoom(roomId) {
 // ==========================================================================
 // 4. СЛУЖБА ПРИЕМА И ГОСТИ (Ясная привязка к номеру, ночи и быстрое заселение)
 // ==========================================================================
-async function renderGuests() {
-  const [guests, bookings, rooms] = await Promise.all([
-    api('/guests'),
-    api('/bookings'),
-    api('/rooms')
-  ]);
+async function renderGuests(cachedGuests, cachedBooks, cachedRooms) {
+  const [guests, bookings, rooms] = (cachedGuests && cachedBooks && cachedRooms)
+    ? [cachedGuests, cachedBooks, cachedRooms]
+    : await Promise.all([
+      api('/guests'),
+      api('/bookings'),
+      api('/rooms')
+    ]);
 
   if (!guests) return;
   globalGuestsCache = guests;
