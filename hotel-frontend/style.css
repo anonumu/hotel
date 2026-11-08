@@ -122,203 +122,147 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 20px;
-  padding-bottom: 24px;
+  gap: 16px;
+  padding-bottom: 20px;
   border-bottom: 1px solid var(--slate-200);
-  margin-bottom: 28px;
+  margin-bottom: 24px;
 }
 
 /* Бренд гостиницы */
 .brand-section {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
+  flex-shrink: 0;
 }
 
-.brand-monogram-box {
-  width: 44px;
-  height: 44px;
+.brand-emblem-box {
+  width: 38px;
+  height: 38px;
   border-radius: 10px;
-  background: var(--slate-900);
-  border: 1px solid var(--slate-800);
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-}
-
-.brand-monogram {
-  color: #ffffff;
-  font-family: var(--font-serif);
-  font-size: 20px;
-  font-weight: 600;
-  letter-spacing: -0.5px;
 }
 
 .brand-info {
   display: flex;
   flex-direction: column;
+  justify-content: center;
 }
 
 .brand-title-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .brand-name {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 800;
-  letter-spacing: 0.5px;
+  letter-spacing: -0.2px;
   color: var(--slate-900);
-}
-
-.brand-stars {
-  font-size: 9.5px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  color: var(--brass-primary);
-  background: var(--brass-light);
-  border: 1px solid var(--brass-border);
-  padding: 1px 6px;
-  border-radius: 4px;
-}
-
-.brand-tagline {
-  font-size: 11.5px;
-  color: var(--slate-500);
-  font-weight: 500;
-  margin-top: 1px;
-}
-
-.brand-credentials {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 4px;
-}
-
-.cred-pill {
-  font-size: 10.5px;
-  font-weight: 600;
-  color: var(--slate-700);
-  background: var(--slate-100);
-  padding: 1px 7px;
-  border-radius: 4px;
-}
-
-.cred-dot {
-  color: var(--slate-300);
-  font-size: 11px;
-}
-
-.cred-instructor {
-  font-size: 10.5px;
-  color: var(--slate-500);
-  font-weight: 600;
-}
-
-/* ==========================================================================
-   ЦЕНТРАЛЬНАЯ КАПСУЛЬНАЯ НАВИГАЦИЯ (FINNOVA EXACT ADAPTATION)
-   ========================================================================== */
-.brand-emblem-box {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
+  line-height: 1.2;
 }
 
 .brand-stars-badge {
-  font-size: 9.5px;
+  font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.05em;
   color: #4f46e5;
   background: #eef2ff;
   border: 1px solid #e0e7ff;
-  padding: 1px 6px;
+  padding: 1px 5px;
   border-radius: 4px;
 }
 
-.cred-divider {
-  color: #cbd5e1;
+.brand-tagline {
   font-size: 11px;
+  color: var(--slate-500);
+  font-weight: 500;
+  margin-top: 1px;
+  line-height: 1.2;
 }
 
+/* ==========================================================================
+   ЦЕНТРАЛЬНАЯ КАПСУЛЬНАЯ НАВИГАЦИЯ (FINNOVA EXACT ADAPTATION)
+   ========================================================================== */
 .nav-capsule {
   display: flex;
   align-items: center;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: #121324;
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 9999px;
   padding: 4px 6px;
-  gap: 3px;
+  gap: 4px;
+  flex-shrink: 0;
 }
 
 .nav-capsule-badge {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
-  background: #0f172a;
+  background: rgba(255, 255, 255, 0.12);
   color: #ffffff;
   font-weight: 800;
-  font-size: 11.5px;
+  font-size: 11px;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-right: 4px;
+  margin-right: 2px;
   flex-shrink: 0;
 }
 
 .nav-item {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   background: transparent;
-  color: #475569;
+  color: #94a3b8;
   border: none;
   font-family: inherit;
-  font-size: 13.5px;
-  font-weight: 600;
-  padding: 8px 16px;
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: 6px 13px;
   border-radius: 9999px;
   cursor: pointer;
-  transition: all 0.18s ease;
+  transition: all 0.16s ease;
   white-space: nowrap;
 }
 
 .nav-item-icon {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
-  opacity: 0.8;
+  opacity: 0.9;
 }
 
 .nav-item:hover:not(.active) {
-  color: #0f172a;
-  background: #f1f5f9;
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .nav-item.active {
   background: #4f46e5;
   color: #ffffff;
-  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.35);
 }
 
 .nav-pill-badge {
-  background: rgba(0, 0, 0, 0.08);
-  color: #475569;
-  font-size: 10.5px;
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+  font-size: 10px;
   padding: 1px 6px;
   border-radius: 9999px;
   font-weight: 700;
+  margin-left: 2px;
 }
 
 .nav-item.active .nav-pill-badge {
-  background: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.28);
   color: #ffffff;
 }
 
@@ -327,6 +271,7 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 .server-status-pill {
@@ -336,8 +281,8 @@ body {
   background: #f8fafc;
   border: 1px solid #e2e8f0;
   border-radius: 9999px;
-  padding: 6px 12px;
-  font-size: 11.5px;
+  padding: 5px 11px;
+  font-size: 11px;
   font-weight: 600;
   color: #334155;
 }
@@ -354,9 +299,9 @@ body {
 }
 
 .icon-square-btn {
-  width: 38px;
-  height: 38px;
-  border-radius: 10px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
   border: 1px solid #e2e8f0;
   background: #ffffff;
   color: #475569;
@@ -368,6 +313,25 @@ body {
 }
 
 .icon-square-btn:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+  border-color: #cbd5e1;
+}
+
+.user-avatar-badge {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #4f46e5;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(79, 70, 229, 0.25);
+}
   background: #f8fafc;
   color: #0f172a;
   border-color: #cbd5e1;
@@ -589,15 +553,18 @@ body {
 /* Векторная графика интерьера отеля (Карточка 1) */
 .bento-room-vector {
   display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 8px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  width: 100%;
 }
 
 .bento-caption-text {
-  font-size: 11.5px;
+  font-size: 11px;
   color: #64748b;
-  font-weight: 500;
+  font-weight: 600;
+  text-align: right;
+  margin-top: -2px;
 }
 
 /* 6 вертикальных скругленных столбцов графика Finnova (Карточка 2) */
@@ -621,10 +588,10 @@ body {
 
 .chart-bar {
   width: 100%;
-  max-width: 12px;
+  max-width: 15px;
   background: #c7d2fe;
-  border-radius: 4px 4px 0 0;
-  min-height: 8px;
+  border-radius: 6px 6px 0 0;
+  min-height: 10px;
   transition: height 0.3s ease;
 }
 
@@ -633,7 +600,7 @@ body {
 }
 
 .chart-bar-col span {
-  font-size: 10px;
+  font-size: 11px;
   color: #94a3b8;
   font-weight: 600;
 }
@@ -641,8 +608,10 @@ body {
 /* Плавный сплайн-график с точками в стиле Finnova (Карточка 3) */
 .bento-spline-chart {
   width: 100%;
-  height: 44px;
+  height: 52px;
   overflow: hidden;
+  display: flex;
+  align-items: flex-end;
 }
 
 /* Плашки номеров и кнопка мгновенного заселения (Карточка 4) */
@@ -650,7 +619,7 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
-  flex-wrap: wrap;
+  width: 100%;
 }
 
 .finnova-mini-chip {
@@ -661,6 +630,7 @@ body {
   color: #475569;
   padding: 4px 8px;
   border-radius: 8px;
+  white-space: nowrap;
 }
 
 .finnova-mini-chip.active {
@@ -674,12 +644,13 @@ body {
   color: #ffffff;
   border: none;
   border-radius: 9999px;
-  padding: 5px 12px;
+  padding: 6px 14px;
   font-size: 11.5px;
   font-weight: 700;
   cursor: pointer;
   transition: all 0.15s ease;
   margin-left: auto;
+  white-space: nowrap;
 }
 
 .finnova-payout-btn:hover {
@@ -1313,47 +1284,71 @@ body {
   margin-bottom: 16px;
 }
 
-.corridor-title {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--slate-900);
+.floor-title-badge {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
-.corridor-stat {
+.floor-num-pill {
+  background: #4f46e5;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 11.5px;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  letter-spacing: 0.02em;
+}
+
+.floor-type-desc {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--slate-800);
+}
+
+.corridor-stats {
   font-size: 12px;
   color: var(--slate-500);
+  background: #f1f5f9;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
 }
 
 .corridor-doors-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
-  gap: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  padding: 8px 0;
 }
 
 /* Реалистичная архитектурная дверь */
 .door-wrapper {
   position: relative;
+  width: 200px;
+  flex-shrink: 0;
 }
 
 .hotel-door {
-  background: #1e293b;
-  border-radius: 10px;
-  padding: 16px 12px;
-  min-height: 220px;
+  background: #171827;
+  border-radius: 12px;
+  padding: 16px 14px;
+  min-height: 225px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   align-items: center;
   cursor: pointer;
   position: relative;
-  transition: transform 0.15s, border-color 0.15s;
-  border: 1px solid #334155;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  border: 1px solid #282a42;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
 }
 
 .hotel-door:hover {
-  transform: translateY(-2px);
-  border-color: #64748b;
+  transform: translateY(-3px);
+  border-color: #4f46e5;
+  box-shadow: 0 8px 24px rgba(79, 70, 229, 0.16);
 }
 
 /* Табличка номера */
@@ -1403,13 +1398,17 @@ body {
 }
 
 .lock-led {
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: #10b981;
+  display: inline-block;
 }
 
+.hotel-door.AVAILABLE .lock-led { background: #10b981; }
 .hotel-door.OCCUPIED .lock-led { background: #ef4444; }
+.hotel-door.BOOKED .lock-led { background: #f59e0b; }
+.hotel-door.CLEANING .lock-led { background: #06b6d4; }
 .hotel-door.OUT_OF_ORDER .lock-led { background: #94a3b8; }
 
 .door-handle-hardware {

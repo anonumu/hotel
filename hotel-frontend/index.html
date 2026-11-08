@@ -21,7 +21,7 @@
       <!-- Бренд гостиничного комплекса: матовый геометрический монограмм без неона -->
       <div class="brand-section">
         <div class="brand-emblem-box" title="Grand Impérial • Hotel Management System">
-          <svg class="brand-emblem-svg" width="26" height="26" viewBox="0 0 24 24" fill="none">
+          <svg class="brand-emblem-svg" width="22" height="22" viewBox="0 0 24 24" fill="none">
             <path d="M4 6.5C4 5.11929 5.11929 4 6.5 4H10L8 12H4.5C4.22386 12 4 11.7761 4 11.5V6.5Z" fill="#4f46e5"/>
             <path d="M10 4H17.5C18.8807 4 20 5.11929 20 6.5V11.5C20 11.7761 19.7761 12 19.5 12H16L14 4H10Z" fill="#6366f1"/>
             <path d="M8 12L6 20H13.5C14.8807 20 16 18.8807 16 17.5V12.5C16 12.2239 15.7761 12 15.5 12H8Z" fill="#4338ca"/>
@@ -30,40 +30,30 @@
         <div class="brand-info">
           <div class="brand-title-row">
             <span class="brand-name">GRAND IMPÉRIAL</span>
-            <span class="brand-stars-badge">5-STAR LUXURY</span>
+            <span class="brand-stars-badge">5-STAR</span>
           </div>
-          <div class="brand-tagline">Информационная система управления гостиницей • Основан в 1904 г.</div>
-          <div class="brand-credentials">
-            <span class="cred-pill">Студент: Сигналов В. А. (3 ИС-3)</span>
-            <span class="cred-divider">•</span>
-            <span class="cred-instructor">Руководитель: Самсонов И. В.</span>
-          </div>
+          <div class="brand-tagline">Luxury Hotel & Resort PMS</div>
         </div>
       </div>
 
       <!-- Центральная капсульная навигация (Finnova Pill Navigation) -->
       <nav class="nav-capsule">
-        <div class="nav-capsule-badge" title="Статус фонда отеля">GI</div>
+        <div class="nav-capsule-badge" title="Статус фонда отеля">80</div>
         <button class="nav-item active" data-view="dashboard">
           <span class="nav-item-icon">+</span>
           <span>Сводка</span>
         </button>
         <button class="nav-item" data-view="rooms">
-          <span>Номерной фонд</span>
-          <span id="nav-rooms-badge" class="nav-pill-badge">0</span>
+          <span>Номера</span>
+          <span id="nav-rooms-badge" class="nav-pill-badge">7</span>
         </button>
         <button class="nav-item" data-view="bookings">
-          <span class="nav-item-icon">+</span>
           <span>Бронирования</span>
-          <span id="nav-bookings-badge" class="nav-pill-badge">0</span>
+          <span id="nav-bookings-badge" class="nav-pill-badge">3</span>
         </button>
         <button class="nav-item" data-view="guests">
           <span>Служба приема</span>
-          <span id="nav-guests-badge" class="nav-pill-badge">0</span>
-        </button>
-        <button class="nav-item" data-view="staff">
-          <span>Персонал</span>
-          <span id="nav-staff-badge" class="nav-pill-badge">0</span>
+          <span id="nav-guests-badge" class="nav-pill-badge">4</span>
         </button>
         <button class="nav-item" data-view="tariffs">
           <span>Касса</span>
@@ -78,7 +68,7 @@
         <!-- Индикатор статуса сервера -->
         <div class="server-status-pill" title="Подключение к Spring Boot REST API">
           <span id="server-status-dot" class="server-pulse-dot"></span>
-          <span id="server-status-label">API 8080 OK</span>
+          <span id="server-status-label">8080 OK</span>
         </div>
 
         <!-- Кнопка синхронизации данных -->
@@ -96,7 +86,7 @@
         </button>
 
         <!-- Аватар оператора системы (Сигналов В. А.) -->
-        <div class="user-avatar-badge" title="Оператор системы: Сигналов В. А. (3 ИС-3)">
+        <div class="user-avatar-badge" title="Оператор: Сигналов В. А. (3 ИС-3) • Научный руководитель: Самсонов И. В.">
           <span>ВС</span>
         </div>
       </div>
@@ -167,18 +157,34 @@
               <span class="trend-arrow">&uarr;</span> 12.5% к прошлому месяцу
             </span>
           </div>
-          <!-- Векторная графика интерьера отеля (как настольная лампа в Finnova) -->
+          <!-- Векторная архитектурная графика люкс-сьюта в стиле Finnova -->
           <div class="bento-visual-slot">
             <div class="bento-room-vector">
-              <svg width="140" height="60" viewBox="0 0 140 60" fill="none">
-                <!-- Лампа и стол -->
-                <rect x="15" y="44" width="40" height="4" rx="2" fill="#cbd5e1"/>
-                <line x1="35" y1="44" x2="35" y2="20" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round"/>
-                <path d="M22 20L35 8L48 20H22Z" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1.5"/>
-                <!-- Кресло / изголовье -->
-                <rect x="70" y="24" width="60" height="24" rx="6" fill="#f1f5f9" stroke="#e2e8f0" stroke-width="1.5"/>
-                <rect x="76" y="32" width="48" height="16" rx="4" fill="#e2e8f0"/>
-                <line x1="65" y1="48" x2="135" y2="48" stroke="#cbd5e1" stroke-width="2" stroke-linecap="round"/>
+              <svg width="100%" height="68" viewBox="0 0 240 68" fill="none">
+                <line x1="8" y1="56" x2="232" y2="56" stroke="#e2e8f0" stroke-width="1.5" stroke-dasharray="3 3"/>
+                <!-- Двуспальная кровать King Size с изголовьем -->
+                <rect x="24" y="22" width="76" height="34" rx="4" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
+                <rect x="24" y="18" width="76" height="6" rx="2" fill="#6366f1"/>
+                <!-- Подушки -->
+                <rect x="30" y="25" width="28" height="12" rx="3" fill="#ffffff" stroke="#cbd5e1" stroke-width="1"/>
+                <rect x="66" y="25" width="28" height="12" rx="3" fill="#ffffff" stroke="#cbd5e1" stroke-width="1"/>
+                <path d="M24 44H100V56H24V44Z" fill="#e0e7ff"/>
+                <!-- Тумба и дизайнерская лампа слева -->
+                <rect x="8" y="36" width="12" height="20" rx="2" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.2"/>
+                <line x1="14" y1="36" x2="14" y2="26" stroke="#94a3b8" stroke-width="1.5"/>
+                <path d="M9 26L14 19L19 26H9Z" fill="#fef3c7" stroke="#d97706" stroke-width="1"/>
+                <!-- Тумба и дизайнерская лампа справа -->
+                <rect x="104" y="36" width="12" height="20" rx="2" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.2"/>
+                <line x1="110" y1="36" x2="110" y2="26" stroke="#94a3b8" stroke-width="1.5"/>
+                <path d="M105 26L110 19L115 26H105Z" fill="#fef3c7" stroke="#d97706" stroke-width="1"/>
+                <!-- Зона отдыха: кресло и кофейный столик -->
+                <rect x="136" y="30" width="36" height="26" rx="6" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="1.2"/>
+                <circle cx="188" cy="44" r="10" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.2"/>
+                <!-- Декоративное растение в кашпо -->
+                <path d="M212 56L215 44H223L226 56H212Z" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+                <path d="M219 44Q214 34 208 32" stroke="#10b981" stroke-width="1.5" stroke-linecap="round"/>
+                <path d="M219 44Q219 30 221 28" stroke="#10b981" stroke-width="1.5" stroke-linecap="round"/>
+                <path d="M219 44Q224 34 230 33" stroke="#10b981" stroke-width="1.5" stroke-linecap="round"/>
               </svg>
               <span id="dash-kpi-occ-meta" class="bento-caption-text">0 из 7 номеров занято</span>
             </div>
@@ -237,18 +243,18 @@
           <!-- Плавный сплайн-график с точками в стиле Finnova -->
           <div class="bento-visual-slot">
             <div class="bento-spline-chart">
-              <svg width="100%" height="45" viewBox="0 0 240 45" fill="none" preserveAspectRatio="none">
-                <path d="M0 38 Q 40 40, 80 28 T 160 16 T 240 6 L 240 45 L 0 45 Z" fill="url(#splineGradient)" opacity="0.4"/>
-                <path d="M0 38 Q 40 40, 80 28 T 160 16 T 240 6" stroke="#4f46e5" stroke-width="2.5" stroke-linecap="round"/>
+              <svg width="100%" height="52" viewBox="0 0 240 52" fill="none" preserveAspectRatio="none">
+                <path d="M0 45 Q 45 42, 85 30 T 165 18 T 240 8 L 240 52 L 0 52 Z" fill="url(#splineGradient)" opacity="0.45"/>
+                <path d="M0 45 Q 45 42, 85 30 T 165 18 T 240 8" stroke="#4f46e5" stroke-width="2.5" stroke-linecap="round"/>
                 <!-- Точки графика Finnova -->
-                <circle cx="15" cy="37" r="3.5" fill="#4f46e5" stroke="#ffffff" stroke-width="2"/>
-                <circle cx="55" cy="35" r="3.5" fill="#4f46e5" stroke="#ffffff" stroke-width="2"/>
-                <circle cx="95" cy="25" r="3.5" fill="#4f46e5" stroke="#ffffff" stroke-width="2"/>
-                <circle cx="135" cy="20" r="3.5" fill="#4f46e5" stroke="#ffffff" stroke-width="2"/>
-                <circle cx="175" cy="14" r="3.5" fill="#4f46e5" stroke="#ffffff" stroke-width="2"/>
-                <circle cx="215" cy="8" r="3.5" fill="#4f46e5" stroke="#ffffff" stroke-width="2"/>
+                <circle cx="15" cy="44" r="3.5" fill="#4f46e5" stroke="#ffffff" stroke-width="2"/>
+                <circle cx="55" cy="38" r="3.5" fill="#4f46e5" stroke="#ffffff" stroke-width="2"/>
+                <circle cx="95" cy="28" r="3.5" fill="#4f46e5" stroke="#ffffff" stroke-width="2"/>
+                <circle cx="135" cy="22" r="3.5" fill="#4f46e5" stroke="#ffffff" stroke-width="2"/>
+                <circle cx="175" cy="16" r="3.5" fill="#4f46e5" stroke="#ffffff" stroke-width="2"/>
+                <circle cx="225" cy="9" r="3.5" fill="#4f46e5" stroke="#ffffff" stroke-width="2"/>
                 <defs>
-                  <linearGradient id="splineGradient" x1="0" y1="0" x2="0" y2="45" gradientUnits="userSpaceOnUse">
+                  <linearGradient id="splineGradient" x1="0" y1="0" x2="0" y2="52" gradientUnits="userSpaceOnUse">
                     <stop stop-color="#818cf8"/>
                     <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
                   </linearGradient>
@@ -368,20 +374,6 @@
               <button class="cockpit-tab-pill" onclick="setCockpitFilter('UNPAID', this)">Ожидают</button>
               <button class="cockpit-tab-pill" onclick="setCockpitFilter('CHECKED_IN', this)">Проживают</button>
             </div>
-          </div>
-
-          <div id="cockpit-bookings-list" class="cockpit-list">
-            <!-- Заполняется динамически через renderDashboardCockpit() -->
-          </div>
-        </div>
-
-        <!-- Правая часть: Архитектурная карточка деталей выбранного бронирования -->
-        <div class="cockpit-detail-pane">
-          <div id="cockpit-detail-container" class="cockpit-detail-card">
-            <!-- Заполняется динамически через renderDashboardCockpit() -->
-          </div>
-        </div>
-      </div>
           </div>
 
           <div id="cockpit-bookings-list" class="cockpit-list">

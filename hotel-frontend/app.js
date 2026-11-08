@@ -1142,10 +1142,10 @@ function renderFloorCorridors(rooms, selectedFloor) {
   }
 
   const floorTitles = {
-    1: '1-й этаж • Базовый уровень (Номера 101 — 102)',
-    2: '2-й этаж • Повышенная комфортность (Номера 201 — 202)',
-    3: '3-й этаж • Представительский уровень (Номера 301 — 302)',
-    4: '4-й этаж • Президентский пентхаус (Номер 401)'
+    1: 'Базовый уровень (Номера 101 — 102)',
+    2: 'Повышенная комфортность (Номера 201 — 202)',
+    3: 'Представительский уровень (Номера 301 — 302)',
+    4: 'Президентский пентхаус (Номер 401)'
   };
 
   container.innerHTML = floorsToShow.map(fNum => {
@@ -1156,7 +1156,7 @@ function renderFloorCorridors(rooms, selectedFloor) {
       <div class="floor-corridor-wing">
         <div class="corridor-header">
           <div class="floor-title-badge">
-            <span>Этаж ${fNum}</span>
+            <span class="floor-num-pill">${fNum}-й этаж</span>
             <span class="floor-type-desc">${floorTitles[fNum] || 'Жилой этаж'}</span>
           </div>
           <div class="corridor-stats">
