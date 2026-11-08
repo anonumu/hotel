@@ -18,6 +18,7 @@ com\hotel\dto\StaffPerformanceDto$StaffMemberStat.class
 com\hotel\model\PaymentMethod.class
 com\hotel\controller\BookingController.class
 com\hotel\dto\ErrorResponseDto.class
+com\hotel\config\SecurityConfig.class
 com\hotel\controller\ReportController.class
 com\hotel\dto\GuestsReportDto.class
 com\hotel\dto\OccupancyReportDto.class
