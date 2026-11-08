@@ -3,6 +3,8 @@ package com.hotel.service;
 import com.hotel.dto.RoomDto;
 import com.hotel.exception.BusinessLogicException;
 import com.hotel.exception.ResourceNotFoundException;
+import com.hotel.model.Booking;
+import com.hotel.model.BookingStatus;
 import com.hotel.model.Room;
 import com.hotel.model.RoomStatus;
 import com.hotel.repository.BookingRepository;
@@ -10,6 +12,7 @@ import com.hotel.repository.RoomRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -40,18 +43,30 @@ public class RoomService {
 
     // Создание нового номера
     public Room createRoom(RoomDto dto) {
-        if (roomRepository.existsByRoomNumber(dto.getRoomNumber())) {
+        if (dto.getRoomNumber() == null || dto.getRoomNumber().trim().isEmpty()) {
+            throw new BusinessLogicException("Номер комнаты обязателен для заполнения");
+        }
+        if (roomRepository.existsByRoomNumber(dto.getRoomNumber().trim())) {
             throw new BusinessLogicException("Номер комнаты " + dto.getRoomNumber() + " уже существует");
+        }
+        if (dto.getPricePerNight() == null || dto.getPricePerNight().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BusinessLogicException("Стоимость за сутки должна быть больше нуля");
+        }
+        if (dto.getMaxGuests() <= 0) {
+            throw new BusinessLogicException("Вместимость номера должна быть не менее 1 человека");
+        }
+        if (dto.getFloor() <= 0) {
+            throw new BusinessLogicException("Этаж должен быть положительным числом");
         }
 
         Room room = new Room();
-        room.setRoomNumber(dto.getRoomNumber());
+        room.setRoomNumber(dto.getRoomNumber().trim());
         room.setType(dto.getType());
         room.setStatus(dto.getStatus() != null ? dto.getStatus() : RoomStatus.AVAILABLE);
         room.setFloor(dto.getFloor());
         room.setPricePerNight(dto.getPricePerNight());
         room.setMaxGuests(dto.getMaxGuests());
-        room.setDescription(dto.getDescription());
+        room.setDescription(dto.getDescription() != null ? dto.getDescription().trim() : "");
 
         return roomRepository.save(room);
     }
@@ -60,12 +75,21 @@ public class RoomService {
     public Room updateRoom(Long id, RoomDto dto) {
         Room room = getRoomById(id);
 
-        if (!room.getRoomNumber().equals(dto.getRoomNumber()) &&
-                roomRepository.existsByRoomNumber(dto.getRoomNumber())) {
-            throw new BusinessLogicException("Номер комнаты " + dto.getRoomNumber() + " уже занят");
+        if (dto.getRoomNumber() == null || dto.getRoomNumber().trim().isEmpty()) {
+            throw new BusinessLogicException("Номер комнаты обязателен для заполнения");
+        }
+        String cleanNumber = dto.getRoomNumber().trim();
+        if (!room.getRoomNumber().equals(cleanNumber) && roomRepository.existsByRoomNumber(cleanNumber)) {
+            throw new BusinessLogicException("Номер комнаты " + cleanNumber + " уже занят");
+        }
+        if (dto.getPricePerNight() == null || dto.getPricePerNight().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BusinessLogicException("Стоимость за сутки должна быть больше нуля");
+        }
+        if (dto.getMaxGuests() <= 0) {
+            throw new BusinessLogicException("Вместимость номера должна быть не менее 1 человека");
         }
 
-        room.setRoomNumber(dto.getRoomNumber());
+        room.setRoomNumber(cleanNumber);
         room.setType(dto.getType());
         if (dto.getStatus() != null) {
             room.setStatus(dto.getStatus());
@@ -73,7 +97,7 @@ public class RoomService {
         room.setFloor(dto.getFloor());
         room.setPricePerNight(dto.getPricePerNight());
         room.setMaxGuests(dto.getMaxGuests());
-        room.setDescription(dto.getDescription());
+        room.setDescription(dto.getDescription() != null ? dto.getDescription().trim() : "");
 
         return roomRepository.save(room);
     }
@@ -85,15 +109,21 @@ public class RoomService {
         return roomRepository.save(room);
     }
 
-    // Удаление номера
+    // Удаление номера с безопасной проверкой связей
     public void deleteRoom(Long id) {
         Room room = getRoomById(id);
-        com.hotel.model.Booking active = bookingRepository.findByRoomId(id).stream()
-                .filter(b -> b.getStatus() != com.hotel.model.BookingStatus.CANCELLED)
-                .findFirst().orElse(null);
-        if (active != null) {
-            throw new BusinessLogicException("Нельзя удалить номер № " + room.getRoomNumber() + 
-                    ", так как к нему привязано бронирование #" + active.getId());
+        List<Booking> bookings = bookingRepository.findByRoomId(id);
+        if (!bookings.isEmpty()) {
+            long activeCount = bookings.stream()
+                    .filter(b -> b.getStatus() != BookingStatus.CANCELLED)
+                    .count();
+            if (activeCount > 0) {
+                throw new BusinessLogicException("Нельзя удалить номер № " + room.getRoomNumber() + 
+                        ", так как по нему есть активные бронирования (" + activeCount + " шт.). Сначала завершите или отмените их.");
+            } else {
+                throw new BusinessLogicException("Нельзя удалить номер № " + room.getRoomNumber() + 
+                        ", так как в системе сохранена история бронирований (" + bookings.size() + " шт.). Рекомендуется перевести его в статус 'На ремонте'.");
+            }
         }
         roomRepository.delete(room);
     }

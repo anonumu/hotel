@@ -57,8 +57,8 @@ public class ReportService {
 
         double rate = 0.0;
         if (totalRooms > 0) {
-            rate = BigDecimal.valueOf((double) occupied / totalRooms * 100)
-                    .setScale(2, RoundingMode.HALF_UP)
+            rate = BigDecimal.valueOf((double) occupied / totalRooms * 100.0)
+                    .setScale(1, RoundingMode.HALF_UP)
                     .doubleValue();
         }
 
@@ -87,10 +87,20 @@ public class ReportService {
         }
 
         List<Object[]> grouped = paymentRepository.sumAmountGroupedByMethod();
-        for (Object[] row : grouped) {
-            PaymentMethod method = (PaymentMethod) row[0];
-            BigDecimal amount = row[1] != null ? new BigDecimal(row[1].toString()) : BigDecimal.ZERO;
-            byMethod.put(method.name(), amount);
+        if (grouped != null) {
+            for (Object[] row : grouped) {
+                if (row == null || row.length < 2) continue;
+                String methodName = null;
+                if (row[0] instanceof PaymentMethod) {
+                    methodName = ((PaymentMethod) row[0]).name();
+                } else if (row[0] != null) {
+                    methodName = row[0].toString();
+                }
+                if (methodName != null) {
+                    BigDecimal amount = row[1] != null ? new BigDecimal(row[1].toString()) : BigDecimal.ZERO;
+                    byMethod.put(methodName, amount);
+                }
+            }
         }
 
         return new RevenueReportDto(totalRevenue, totalCount, byMethod);
@@ -105,7 +115,9 @@ public class ReportService {
         List<Guest> guests = guestRepository.findAll();
         Map<String, Long> byNationality = guests.stream()
                 .collect(Collectors.groupingBy(
-                        g -> g.getNationality() != null ? g.getNationality() : "Не указано",
+                        g -> (g.getNationality() != null && !g.getNationality().trim().isEmpty())
+                                ? g.getNationality().trim()
+                                : "Не указано",
                         Collectors.counting()
                 ));
 

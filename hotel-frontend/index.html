@@ -3,89 +3,156 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ИС «Гостиница» — Управление номерным фондом</title>
+  <title>ИС «Гостиница» — Премиальная система управления отелем</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-  <!-- Верхняя панель сайта -->
+  <!-- ======================================================================
+       ВЕРХНЯЯ СИСТЕМНАЯ ПАНЕЛЬ И НАВИГАЦИЯ
+       ====================================================================== -->
   <header class="navbar">
     <div class="navbar-container">
-      <div class="brand">
-        <h1>ИС «Гостиница»</h1>
-        <div class="brand-sub">Практическая работа • Студент: Сигналов В. А. (3 ИС-3) • Преподаватель: Самсонов И. В.</div>
+      <div class="brand-wrap">
+        <div class="brand-logo-badge">HG</div>
+        <div class="brand-info">
+          <h1>ИС «Гостиница»</h1>
+          <div class="brand-meta">
+            <span class="brand-pill">Студент: Сигналов В. А. (3 ИС-3)</span>
+            <span>•</span>
+            <span>Преподаватель: Самсонов И. В.</span>
+          </div>
+        </div>
       </div>
-      <div class="server-box">
-        <span id="server-status-label" class="badge badge-AVAILABLE">Проверка связи...</span>
-        <button class="btn btn-sm btn-secondary" onclick="checkBackendConnection().then(() => notify('Статус связи обновлен'))">
-          Обновить
+
+      <div class="server-connection-bar">
+        <div class="status-indicator-pill">
+          <span id="server-status-dot" class="status-dot online"></span>
+          <span id="server-status-label">Проверка связи...</span>
+        </div>
+        <button class="btn btn-xs btn-outline" onclick="checkBackendConnection(true)">
+          Обновить связь
         </button>
       </div>
     </div>
 
     <!-- Вкладки навигации -->
-    <nav class="nav-tabs">
-      <button class="nav-link active" data-view="dashboard">Сводка</button>
-      <button class="nav-link" data-view="rooms">Номерной фонд <span id="nav-rooms-badge" class="nav-counter"></span></button>
-      <button class="nav-link" data-view="bookings">Бронирования <span id="nav-bookings-badge" class="nav-counter"></span></button>
-      <button class="nav-link" data-view="guests">Гости <span id="nav-guests-badge" class="nav-counter"></span></button>
-      <button class="nav-link" data-view="staff">Сотрудники <span id="nav-staff-badge" class="nav-counter"></span></button>
-      <button class="nav-link" data-view="tariffs">Тарифы и касса</button>
-      <button class="nav-link" data-view="reports">Отчеты</button>
-    </nav>
+    <div class="nav-tabs-wrapper">
+      <nav class="nav-tabs">
+        <button class="nav-link active" data-view="dashboard">
+          <span>Сводка</span>
+        </button>
+        <button class="nav-link" data-view="rooms">
+          <span>Номерной фонд</span>
+          <span id="nav-rooms-badge" class="nav-counter"></span>
+        </button>
+        <button class="nav-link" data-view="bookings">
+          <span>Бронирования</span>
+          <span id="nav-bookings-badge" class="nav-counter"></span>
+        </button>
+        <button class="nav-link" data-view="guests">
+          <span>Гости</span>
+          <span id="nav-guests-badge" class="nav-counter"></span>
+        </button>
+        <button class="nav-link" data-view="staff">
+          <span>Персонал</span>
+          <span id="nav-staff-badge" class="nav-counter"></span>
+        </button>
+        <button class="nav-link" data-view="tariffs">
+          <span>Тарифы и касса</span>
+        </button>
+        <button class="nav-link" data-view="reports">
+          <span>Аналитика и отчеты</span>
+        </button>
+      </nav>
+    </div>
   </header>
 
-  <!-- Основной контейнер -->
+  <!-- ======================================================================
+       ОСНОВНОЙ РАБОЧИЙ КОНТЕЙНЕР
+       ====================================================================== -->
   <main class="container">
 
     <!-- 1. ДАШБОРД (СВОДКА) -->
     <section id="view-dashboard" class="screen-view active">
       
-      <!-- Статистические показатели -->
+      <!-- Bento KPI Сводка -->
       <div class="summary-boxes">
-        <div class="summary-box">
-          <div class="title">Загрузка отеля</div>
-          <div id="dash-kpi-rate" class="val" style="color:#0d6efd">0%</div>
+        <div class="bento-kpi-shell">
+          <div class="bento-kpi-core">
+            <div class="eyebrow">Загрузка фонда</div>
+            <div id="dash-kpi-rate" class="val" style="color:var(--primary-accent)">0%</div>
+            <div class="sub-desc">Текущая занятость жилых номеров</div>
+          </div>
         </div>
 
-        <div class="summary-box">
-          <div class="title">Свободные номера</div>
-          <div id="dash-kpi-avail" class="val" style="color:#198754">0</div>
+        <div class="bento-kpi-shell">
+          <div class="bento-kpi-core">
+            <div class="eyebrow">Свободные номера</div>
+            <div id="dash-kpi-avail" class="val" style="color:#059669">0</div>
+            <div class="sub-desc">Готовы к заселению гостей</div>
+          </div>
         </div>
 
-        <div class="summary-box">
-          <div class="title">Номера на уборке</div>
-          <div id="dash-kpi-clean" class="val" style="color:#0dcaf0">0</div>
+        <div class="bento-kpi-shell">
+          <div class="bento-kpi-core">
+            <div class="eyebrow">Номера на уборке</div>
+            <div id="dash-kpi-clean" class="val" style="color:#0284c7">0</div>
+            <div class="sub-desc">Ожидают обслуживания горничной</div>
+          </div>
         </div>
 
-        <div class="summary-box">
-          <div class="title">Общая выручка</div>
-          <div id="dash-kpi-rev" class="val" style="color:#212529">0 ₽</div>
+        <div class="bento-kpi-shell">
+          <div class="bento-kpi-core">
+            <div class="eyebrow">Общая выручка</div>
+            <div id="dash-kpi-rev" class="val" style="color:var(--text-main)">0 ₽</div>
+            <div class="sub-desc">Всего проведенных платежей</div>
+          </div>
         </div>
       </div>
 
-      <!-- Карта номеров -->
-      <div class="card">
-        <div class="card-title">Номерной фонд (клик по номеру меняет статус)</div>
-        <div id="dash-matrix" class="rooms-grid"></div>
+      <!-- Интерактивная карта номеров -->
+      <div class="card-shell">
+        <div class="card">
+          <div class="card-header-flex">
+            <div>
+              <div class="card-eyebrow">Оперативный статус</div>
+              <div class="card-title">Карта номерного фонда</div>
+            </div>
+            <div style="font-size:12px; color:var(--text-muted)">
+              Клик по карточке номера открывает смену статуса
+            </div>
+          </div>
+          <div id="dash-matrix" class="rooms-grid"></div>
+        </div>
       </div>
 
-      <!-- Проживающие гости -->
-      <div class="card">
-        <div class="card-title">Текущие постояльцы в отеле</div>
-        <div class="table-responsive">
-          <table class="table">
-            <thead>
-              <tr>
-                <th>Гость</th>
-                <th>Телефон</th>
-                <th>Паспорт</th>
-                <th>Статус</th>
-                <th>Действие</th>
-              </tr>
-            </thead>
-            <tbody id="dash-arrivals"></tbody>
-          </table>
+      <!-- Текущие постояльцы -->
+      <div class="card-shell">
+        <div class="card">
+          <div class="card-header-flex">
+            <div>
+              <div class="card-eyebrow">Размещение</div>
+              <div class="card-title">Текущие постояльцы отеля</div>
+            </div>
+          </div>
+          <div class="table-responsive">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Гость</th>
+                  <th>Телефон</th>
+                  <th>Паспорт</th>
+                  <th>Статус</th>
+                  <th>Действие</th>
+                </tr>
+              </thead>
+              <tbody id="dash-arrivals"></tbody>
+            </table>
+          </div>
         </div>
       </div>
 
@@ -93,198 +160,266 @@
 
     <!-- 2. НОМЕРА -->
     <section id="view-rooms" class="screen-view">
-      <div class="card">
-        <div class="table-toolbar">
-          <div style="display:flex; gap:8px; flex-wrap:wrap">
-            <input type="text" id="room-search-input" class="form-control" placeholder="Поиск по номеру..." oninput="filterRoomsList()">
-            <select id="room-status-filter" class="form-control" onchange="filterRoomsList()">
-              <option value="">Все статусы</option>
-              <option value="AVAILABLE">Свободен</option>
-              <option value="OCCUPIED">Занят</option>
-              <option value="BOOKED">Забронирован</option>
-              <option value="CLEANING">На уборке</option>
-              <option value="OUT_OF_ORDER">Ремонт</option>
-            </select>
+      <div class="card-shell">
+        <div class="card">
+          <div class="table-toolbar">
+            <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center">
+              <input type="text" id="room-search-input" class="form-control" style="width:220px" placeholder="Поиск по номеру..." oninput="filterRoomsList()">
+              <select id="room-status-filter" class="form-control" style="width:180px" onchange="filterRoomsList()">
+                <option value="">Все статусы</option>
+                <option value="AVAILABLE">Свободен</option>
+                <option value="OCCUPIED">Занят</option>
+                <option value="BOOKED">Забронирован</option>
+                <option value="CLEANING">На уборке</option>
+                <option value="OUT_OF_ORDER">Ремонт</option>
+              </select>
+            </div>
+            <button class="btn btn-primary" onclick="openModal('modal-add-room')">
+              + Добавить номер
+            </button>
           </div>
-          <button class="btn btn-primary" onclick="openModal('modal-add-room')">
-            + Добавить номер
-          </button>
-        </div>
 
-        <div class="table-responsive">
-          <table class="table">
-            <thead>
-              <tr>
-                <th>Номер</th>
-                <th>Категория</th>
-                <th>Этаж</th>
-                <th>Вместимость</th>
-                <th>Цена за сутки</th>
-                <th>Статус</th>
-                <th>Действия</th>
-              </tr>
-            </thead>
-            <tbody id="rooms-tbody"></tbody>
-          </table>
+          <div class="table-responsive">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Номер</th>
+                  <th>Категория</th>
+                  <th>Этаж</th>
+                  <th>Вместимость</th>
+                  <th>Цена за сутки</th>
+                  <th>Статус</th>
+                  <th>Действия</th>
+                </tr>
+              </thead>
+              <tbody id="rooms-tbody"></tbody>
+            </table>
+          </div>
         </div>
       </div>
     </section>
 
     <!-- 3. БРОНИРОВАНИЯ -->
     <section id="view-bookings" class="screen-view">
-      <div class="card">
-        <div class="card-header-flex">
-          <div class="card-title" style="margin-bottom:0; border:none">Журнал бронирований</div>
-          <button class="btn btn-primary" onclick="openModal('modal-add-booking')">
-            + Создать бронь
-          </button>
-        </div>
+      <div class="card-shell">
+        <div class="card">
+          <div class="card-header-flex">
+            <div>
+              <div class="card-eyebrow">Журнал размещения</div>
+              <div class="card-title">Все бронирования</div>
+            </div>
+            <button class="btn btn-primary" onclick="openModal('modal-add-booking')">
+              + Создать бронь
+            </button>
+          </div>
 
-        <div class="table-responsive">
-          <table class="table">
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Гость</th>
-                <th>Номер</th>
-                <th>Даты проживания</th>
-                <th>Сумма</th>
-                <th>Статус</th>
-                <th>Действия</th>
-              </tr>
-            </thead>
-            <tbody id="bookings-tbody"></tbody>
-          </table>
+          <div class="table-responsive">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Гость</th>
+                  <th>Номер</th>
+                  <th>Даты проживания</th>
+                  <th>Стоимость</th>
+                  <th>Статус</th>
+                  <th>Действия</th>
+                </tr>
+              </thead>
+              <tbody id="bookings-tbody"></tbody>
+            </table>
+          </div>
         </div>
       </div>
     </section>
 
     <!-- 4. ГОСТИ -->
     <section id="view-guests" class="screen-view">
-      <div class="card">
-        <div class="card-header-flex">
-          <div class="card-title" style="margin-bottom:0; border:none">База постояльцев</div>
-          <button class="btn btn-primary" onclick="openModal('modal-add-guest')">
-            + Зарегистрировать гостя
-          </button>
-        </div>
+      <div class="card-shell">
+        <div class="card">
+          <div class="card-header-flex">
+            <div>
+              <div class="card-eyebrow">Регистрационный учет</div>
+              <div class="card-title">База постояльцев</div>
+            </div>
+            <button class="btn btn-primary" onclick="openModal('modal-add-guest')">
+              + Зарегистрировать гостя
+            </button>
+          </div>
 
-        <div class="table-responsive">
-          <table class="table">
-            <thead>
-              <tr>
-                <th>ФИО</th>
-                <th>Паспорт</th>
-                <th>Телефон</th>
-                <th>Email</th>
-                <th>Гражданство</th>
-                <th>Статус</th>
-                <th>Действие</th>
-              </tr>
-            </thead>
-            <tbody id="guests-tbody"></tbody>
-          </table>
+          <div class="table-responsive">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>ФИО</th>
+                  <th>Паспорт</th>
+                  <th>Телефон</th>
+                  <th>Email</th>
+                  <th>Гражданство</th>
+                  <th>Статус</th>
+                  <th>Действие</th>
+                </tr>
+              </thead>
+              <tbody id="guests-tbody"></tbody>
+            </table>
+          </div>
         </div>
       </div>
     </section>
 
     <!-- 5. ПЕРСОНАЛ -->
     <section id="view-staff" class="screen-view">
-      <div class="card">
-        <div class="card-header-flex">
-          <div class="card-title" style="margin-bottom:0; border:none">Сотрудники гостиницы</div>
-          <button class="btn btn-primary" onclick="openModal('modal-add-staff')">
-            + Добавить сотрудника
-          </button>
+      <div class="card-shell">
+        <div class="card">
+          <div class="card-header-flex">
+            <div>
+              <div class="card-eyebrow">Штатное расписание</div>
+              <div class="card-title">Сотрудники гостиницы</div>
+            </div>
+            <button class="btn btn-primary" onclick="openModal('modal-add-staff')">
+              + Добавить сотрудника
+            </button>
+          </div>
+          <div id="staff-grid" class="staff-grid"></div>
         </div>
-        <div id="staff-grid" class="staff-grid"></div>
       </div>
     </section>
 
     <!-- 6. ТАРИФЫ И КАССА -->
     <section id="view-tariffs" class="screen-view">
-      <div class="card">
-        <div class="card-title">Тарифные планы</div>
-        <div class="table-responsive">
-          <table class="table">
-            <thead>
-              <tr>
-                <th>Тариф</th>
-                <th>Категория</th>
-                <th>Цена за сутки</th>
-                <th>Период</th>
-                <th>Статус</th>
-              </tr>
-            </thead>
-            <tbody id="tariffs-tbody"></tbody>
-          </table>
+      <div class="card-shell">
+        <div class="card">
+          <div class="card-header-flex">
+            <div>
+              <div class="card-eyebrow">Ценообразование</div>
+              <div class="card-title">Тарифные планы</div>
+            </div>
+          </div>
+          <div class="table-responsive">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Тариф</th>
+                  <th>Категория</th>
+                  <th>Цена за сутки</th>
+                  <th>Период действия</th>
+                  <th>Статус</th>
+                </tr>
+              </thead>
+              <tbody id="tariffs-tbody"></tbody>
+            </table>
+          </div>
         </div>
       </div>
 
-      <div class="card">
-        <div class="card-header-flex">
-          <div class="card-title" style="margin-bottom:0; border:none">Кассовый журнал платежей</div>
-          <button class="btn btn-primary" onclick="openPaymentModal()">
-            + Принять оплату
-          </button>
-        </div>
-        <div class="table-responsive">
-          <table class="table">
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Основание</th>
-                <th>Сумма</th>
-                <th>Способ оплаты</th>
-                <th>Дата и время</th>
-                <th>Примечание</th>
-              </tr>
-            </thead>
-            <tbody id="payments-tbody"></tbody>
-          </table>
+      <div class="card-shell">
+        <div class="card">
+          <div class="card-header-flex">
+            <div>
+              <div class="card-eyebrow">Финансовые операции</div>
+              <div class="card-title">Кассовый журнал платежей</div>
+            </div>
+            <button class="btn btn-primary" onclick="openPaymentModal()">
+              + Принять оплату
+            </button>
+          </div>
+          <div class="table-responsive">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Основание</th>
+                  <th>Сумма</th>
+                  <th>Способ оплаты</th>
+                  <th>Дата и время</th>
+                  <th>Примечание</th>
+                </tr>
+              </thead>
+              <tbody id="payments-tbody"></tbody>
+            </table>
+          </div>
         </div>
       </div>
     </section>
 
     <!-- 7. АНАЛИТИКА И ОТЧЕТЫ -->
     <section id="view-reports" class="screen-view">
+      
+      <!-- Верхние сводные показатели -->
       <div class="summary-boxes">
-        <div class="summary-box">
-          <div class="title">Средняя загрузка фонда</div>
-          <div id="rep-occ-rate" class="val" style="color:#0d6efd">0%</div>
-          <div id="rep-occ-total" style="font-size:12px; color:#6c757d; margin-top:4px">Всего 0 номеров</div>
-          <div id="rep-occ-breakdown" style="font-size:11.5px; color:#495057; margin-top:6px"></div>
+        <div class="bento-kpi-shell">
+          <div class="bento-kpi-core">
+            <div class="eyebrow">Средняя загрузка фонда</div>
+            <div id="rep-occ-rate" class="val" style="color:var(--primary-accent)">0%</div>
+            <div id="rep-occ-total" class="sub-desc" style="font-weight:600">Всего 0 номеров</div>
+            <div id="rep-occ-breakdown" class="sub-desc" style="margin-top:6px"></div>
+          </div>
         </div>
 
-        <div class="summary-box">
-          <div class="title">Общая выручка</div>
-          <div id="rep-rev-total" class="val" style="color:#198754">0 ₽</div>
-          <div id="rep-rev-tx" style="font-size:12px; color:#6c757d; margin-top:4px">0 платежей</div>
+        <div class="bento-kpi-shell">
+          <div class="bento-kpi-core">
+            <div class="eyebrow">Общая выручка отеля</div>
+            <div id="rep-rev-total" class="val" style="color:#059669">0 ₽</div>
+            <div id="rep-rev-tx" class="sub-desc" style="font-weight:600">0 платежей проведено</div>
+            <div class="sub-desc" style="margin-top:6px">Успешные транзакции</div>
+          </div>
         </div>
       </div>
 
+      <!-- Детальная аналитика -->
       <div class="report-grid">
-        <div class="card">
-          <div class="card-title">Структура выручки</div>
-          <div style="display:flex; flex-direction:column; gap:10px; font-size:13px">
-            <div style="display:flex; justify-content:space-between; padding-bottom:8px; border-bottom:1px solid #edf2f7">
-              <span style="color:#6c757d">Оплата картой:</span>
-              <strong id="rep-card-sum">0 ₽</strong>
+        <div class="card-shell">
+          <div class="card">
+            <div class="card-header-flex">
+              <div>
+                <div class="card-eyebrow">Финансы</div>
+                <div class="card-title">Структура выручки по способам</div>
+              </div>
             </div>
-            <div style="display:flex; justify-content:space-between; padding-bottom:8px; border-bottom:1px solid #edf2f7">
-              <span style="color:#6c757d">Безналичный перевод:</span>
-              <strong id="rep-transfer-sum">0 ₽</strong>
-            </div>
-            <div style="display:flex; justify-content:space-between">
-              <span style="color:#6c757d">Наличный расчет:</span>
-              <strong id="rep-cash-sum">0 ₽</strong>
+            <div class="metric-bar-group">
+              <div class="metric-bar-item">
+                <div class="metric-bar-labels">
+                  <span style="color:var(--text-secondary); font-weight:600">Банковская карта:</span>
+                  <strong id="rep-card-sum" style="color:var(--text-main)">0 ₽</strong>
+                </div>
+                <div class="metric-bar-track">
+                  <div id="rep-card-bar" class="metric-bar-fill card-blue" style="width:0%"></div>
+                </div>
+              </div>
+
+              <div class="metric-bar-item">
+                <div class="metric-bar-labels">
+                  <span style="color:var(--text-secondary); font-weight:600">Безналичный перевод:</span>
+                  <strong id="rep-transfer-sum" style="color:var(--text-main)">0 ₽</strong>
+                </div>
+                <div class="metric-bar-track">
+                  <div id="rep-transfer-bar" class="metric-bar-fill transfer-purple" style="width:0%"></div>
+                </div>
+              </div>
+
+              <div class="metric-bar-item">
+                <div class="metric-bar-labels">
+                  <span style="color:var(--text-secondary); font-weight:600">Наличный расчет:</span>
+                  <strong id="rep-cash-sum" style="color:var(--text-main)">0 ₽</strong>
+                </div>
+                <div class="metric-bar-track">
+                  <div id="rep-cash-bar" class="metric-bar-fill cash-emerald" style="width:0%"></div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
-        <div class="card">
-          <div class="card-title">Эффективность персонала</div>
-          <div id="rep-staff-kpi"></div>
+        <div class="card-shell">
+          <div class="card">
+            <div class="card-header-flex">
+              <div>
+                <div class="card-eyebrow">Команда</div>
+                <div class="card-title">Эффективность персонала</div>
+              </div>
+            </div>
+            <div id="rep-staff-kpi" style="display:flex; flex-direction:column; gap:12px"></div>
+          </div>
         </div>
       </div>
     </section>
@@ -292,7 +427,7 @@
   </main>
 
   <!-- ======================================================================
-       МОДАЛЬНЫЕ ОКНА
+       МОДАЛЬНЫЕ ОКНА С ИНЛАЙН-ОШИБКАМИ
        ====================================================================== -->
 
   <!-- 1. Смена статуса номера -->
@@ -303,6 +438,7 @@
         <button class="modal-close-btn" onclick="closeModal('modal-status')">&times;</button>
       </div>
       <div class="modal-body">
+        <div id="modal-status-alert" class="modal-alert" style="display:none"></div>
         <div class="form-group">
           <label>Выберите новый статус</label>
           <select id="modal-room-status-sel" class="form-control">
@@ -316,7 +452,7 @@
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeModal('modal-status')">Отмена</button>
-        <button class="btn btn-primary" onclick="applyRoomStatus()">Сохранить</button>
+        <button id="modal-status-submit-btn" class="btn btn-primary" onclick="applyRoomStatus()">Сохранить</button>
       </div>
     </div>
   </div>
@@ -330,6 +466,7 @@
       </div>
       <form onsubmit="submitRoom(event)">
         <div class="modal-body form-grid">
+          <div id="modal-add-room-alert" class="modal-alert full" style="display:none"></div>
           <div class="form-group">
             <label>Номер комнаты</label>
             <input type="text" id="add-room-num" class="form-control" required placeholder="Например: 501">
@@ -368,12 +505,12 @@
           </div>
           <div class="form-group full">
             <label>Описание</label>
-            <textarea id="add-room-desc" class="form-control" rows="2" placeholder="Кровать king-size, балкон, мини-бар..."></textarea>
+            <textarea id="add-room-desc" class="form-control" rows="2" placeholder="Кровать king-size, балкон, вид на город..."></textarea>
           </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" onclick="closeModal('modal-add-room')">Отмена</button>
-          <button type="submit" class="btn btn-primary">Создать</button>
+          <button type="submit" id="add-room-submit-btn" class="btn btn-primary">Создать номер</button>
         </div>
       </form>
     </div>
@@ -388,6 +525,7 @@
       </div>
       <form onsubmit="submitBooking(event)">
         <div class="modal-body form-grid">
+          <div id="modal-add-booking-alert" class="modal-alert full" style="display:none"></div>
           <div class="form-group full">
             <label>Номер</label>
             <select id="newbook-room" class="form-control" required></select>
@@ -398,20 +536,20 @@
           </div>
           <div class="form-group">
             <label>Дата заезда</label>
-            <input type="date" id="newbook-checkin" class="form-control" value="2026-11-10" required>
+            <input type="date" id="newbook-checkin" class="form-control" required>
           </div>
           <div class="form-group">
             <label>Дата выезда</label>
-            <input type="date" id="newbook-checkout" class="form-control" value="2026-11-15" required>
+            <input type="date" id="newbook-checkout" class="form-control" required>
           </div>
           <div class="form-group full">
             <label>Количество гостей</label>
-            <input type="number" id="newbook-count" class="form-control" value="2" min="1" max="6" required>
+            <input type="number" id="newbook-count" class="form-control" value="2" min="1" max="8" required>
           </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" onclick="closeModal('modal-add-booking')">Отмена</button>
-          <button type="submit" class="btn btn-primary">Забронировать</button>
+          <button type="submit" id="add-booking-submit-btn" class="btn btn-primary">Подтвердить бронь</button>
         </div>
       </form>
     </div>
@@ -426,6 +564,7 @@
       </div>
       <form onsubmit="submitGuest(event)">
         <div class="modal-body form-grid">
+          <div id="modal-add-guest-alert" class="modal-alert full" style="display:none"></div>
           <div class="form-group">
             <label>Имя</label>
             <input type="text" id="guest-fn" class="form-control" required placeholder="Константин">
@@ -440,10 +579,10 @@
           </div>
           <div class="form-group">
             <label>Email</label>
-            <input type="email" id="guest-em" class="form-control" required placeholder="guest@domain.com">
+            <input type="email" id="guest-em" class="form-control" required placeholder="guest@hotel.ru">
           </div>
           <div class="form-group">
-            <label>Паспорт</label>
+            <label>Паспортные данные</label>
             <input type="text" id="guest-pass" class="form-control" required placeholder="4512 876543">
           </div>
           <div class="form-group">
@@ -453,7 +592,7 @@
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" onclick="closeModal('modal-add-guest')">Отмена</button>
-          <button type="submit" class="btn btn-primary">Зарегистрировать</button>
+          <button type="submit" id="add-guest-submit-btn" class="btn btn-primary">Зарегистрировать</button>
         </div>
       </form>
     </div>
@@ -468,6 +607,7 @@
       </div>
       <form onsubmit="submitStaff(event)">
         <div class="modal-body form-grid">
+          <div id="modal-add-staff-alert" class="modal-alert full" style="display:none"></div>
           <div class="form-group">
             <label>Имя</label>
             <input type="text" id="staff-fn" class="form-control" required>
@@ -501,7 +641,7 @@
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" onclick="closeModal('modal-add-staff')">Отмена</button>
-          <button type="submit" class="btn btn-primary">Добавить</button>
+          <button type="submit" id="add-staff-submit-btn" class="btn btn-primary">Добавить в штат</button>
         </div>
       </form>
     </div>
@@ -514,27 +654,27 @@
         <h3>График рабочей смены</h3>
         <button class="modal-close-btn" onclick="closeModal('modal-staff-shift')">&times;</button>
       </div>
-      <div class="modal-body" style="display:flex; flex-direction:column; gap:12px">
+      <div class="modal-body" style="display:flex; flex-direction:column; gap:16px">
         <div>
-          <div style="font-size:16px; font-weight:bold" id="sch-name"></div>
-          <div style="font-size:12px; color:#0d6efd" id="sch-pos"></div>
+          <div style="font-size:16px; font-weight:800; color:var(--text-main)" id="sch-name"></div>
+          <div style="font-size:12.5px; color:var(--primary-accent); font-weight:600; margin-top:2px" id="sch-pos"></div>
         </div>
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; font-size:12.5px; padding-top:10px; border-top:1px solid #dee2e6">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; font-size:12.5px; padding-top:14px; border-top:1px solid var(--border-inner)">
           <div>
-            <div style="color:#6c757d">Часы смены:</div>
-            <strong id="sch-hours"></strong>
+            <div style="color:var(--text-muted); font-size:11px; text-transform:uppercase; font-weight:700">Часы смены:</div>
+            <strong id="sch-hours" style="color:var(--text-main); font-size:13px"></strong>
           </div>
           <div>
-            <div style="color:#6c757d">График работы:</div>
-            <strong id="sch-plan"></strong>
+            <div style="color:var(--text-muted); font-size:11px; text-transform:uppercase; font-weight:700">График работы:</div>
+            <strong id="sch-plan" style="color:var(--text-main); font-size:13px"></strong>
           </div>
           <div>
-            <div style="color:#6c757d">Закрепленная зона:</div>
-            <strong id="sch-zone"></strong>
+            <div style="color:var(--text-muted); font-size:11px; text-transform:uppercase; font-weight:700">Закрепленная зона:</div>
+            <strong id="sch-zone" style="color:var(--text-main); font-size:13px"></strong>
           </div>
           <div>
-            <div style="color:#6c757d">Текущий статус:</div>
-            <strong id="sch-status" style="color:#198754"></strong>
+            <div style="color:var(--text-muted); font-size:11px; text-transform:uppercase; font-weight:700">Текущий статус:</div>
+            <strong id="sch-status" style="color:#059669; font-size:13px"></strong>
           </div>
         </div>
       </div>
@@ -548,7 +688,7 @@
   <div id="modal-folio" class="modal-backdrop">
     <div class="modal-box wide">
       <div class="modal-header">
-        <h3>Счёт за проживание</h3>
+        <h3>Гостевой счёт за проживание</h3>
         <button class="modal-close-btn" onclick="closeModal('modal-folio')">&times;</button>
       </div>
       <div class="modal-body">
@@ -559,23 +699,23 @@
               <div class="inv-hotel-sub">г. Москва, ул. Центральная, д. 10 • Тел: +7 (495) 123-45-67</div>
             </div>
             <div style="text-align:right">
-              <div id="inv-code" style="font-size:16px; font-weight:bold; color:#0d6efd">INV-000000</div>
-              <div id="inv-date-val" style="font-size:12px; color:#6c757d">Дата: 2026-11-05</div>
+              <div id="inv-code" style="font-size:16px; font-weight:800; color:var(--primary-accent)">INV-000000</div>
+              <div id="inv-date-val" style="font-size:12px; color:var(--text-muted); margin-top:2px">Дата: 2026-11-05</div>
             </div>
           </div>
 
           <div class="inv-grid">
             <div>
-              <div style="font-size:11px; text-transform:uppercase; color:#6c757d; font-weight:bold">Гость:</div>
-              <div id="inv-guest-name" style="font-size:14px; font-weight:bold; margin-top:2px">Иванов Иван</div>
-              <div id="inv-guest-passport" style="color:#495057; font-size:12px">Паспорт: 4510 123456</div>
-              <div id="inv-guest-phone" style="color:#495057; font-size:12px">Телефон: +7 (999) 000-00-00</div>
+              <div style="font-size:10.5px; text-transform:uppercase; color:var(--text-muted); font-weight:700">Гость:</div>
+              <div id="inv-guest-name" style="font-size:14px; font-weight:700; margin-top:3px; color:var(--text-main)">Иванов Иван</div>
+              <div id="inv-guest-passport" style="color:var(--text-secondary); font-size:12px; margin-top:2px">Паспорт: 4510 123456</div>
+              <div id="inv-guest-phone" style="color:var(--text-secondary); font-size:12px">Телефон: +7 (999) 000-00-00</div>
             </div>
             <div style="text-align:right">
-              <div style="font-size:11px; text-transform:uppercase; color:#6c757d; font-weight:bold">Параметры:</div>
-              <div id="inv-room-info" style="font-size:14px; font-weight:bold; margin-top:2px">Номер 101 (Стандарт)</div>
-              <div id="inv-dates-info" style="color:#495057; font-size:12px">2026-11-01 — 2026-11-08</div>
-              <div id="inv-rate-info" style="color:#495057; font-size:12px">Тариф: 3 500 ₽/сутки</div>
+              <div style="font-size:10.5px; text-transform:uppercase; color:var(--text-muted); font-weight:700">Параметры размещения:</div>
+              <div id="inv-room-info" style="font-size:14px; font-weight:700; margin-top:3px; color:var(--text-main)">Номер 101 (Стандарт)</div>
+              <div id="inv-dates-info" style="color:var(--text-secondary); font-size:12px; margin-top:2px">2026-11-01 — 2026-11-08</div>
+              <div id="inv-rate-info" style="color:var(--text-secondary); font-size:12px">Тариф: 3 500 ₽/сутки</div>
             </div>
           </div>
 
@@ -589,17 +729,17 @@
             <tbody>
               <tr>
                 <td>Проживание в номере выбранной категории</td>
-                <td style="text-align:right; font-weight:bold" id="inv-charge-total">35 000 ₽</td>
+                <td style="text-align:right; font-weight:700" id="inv-charge-total">35 000 ₽</td>
               </tr>
             </tbody>
           </table>
 
           <div class="inv-summary">
             <div>Всего начислено: <strong id="inv-sum-total">35 000 ₽</strong></div>
-            <div>Оплачено: <strong id="inv-paid-sum">35 000 ₽</strong></div>
+            <div>Оплачено: <strong id="inv-paid-sum" style="color:#059669">35 000 ₽</strong></div>
             <div>Остаток к оплате: <strong id="inv-due-sum">0 ₽</strong></div>
-            <div style="margin-top:6px">
-              Статус оплаты: <span id="inv-status-label" class="badge badge-AVAILABLE">ОПЛАЧЕНО</span>
+            <div style="margin-top:8px">
+              Статус расчета: <span id="inv-status-label" class="badge badge-AVAILABLE">ОПЛАЧЕНО</span>
             </div>
           </div>
         </div>
@@ -607,7 +747,7 @@
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeModal('modal-folio')">Закрыть</button>
         <button class="btn btn-primary" onclick="window.print()">
-          Печать счёта
+          Печать документа
         </button>
       </div>
     </div>
@@ -622,6 +762,7 @@
       </div>
       <form onsubmit="submitPayment(event)">
         <div class="modal-body form-grid">
+          <div id="modal-add-payment-alert" class="modal-alert full" style="display:none"></div>
           <div class="form-group full">
             <label>Бронирование</label>
             <select id="pay-booking-sel" class="form-control" required></select>
@@ -645,13 +786,13 @@
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" onclick="closeModal('modal-add-payment')">Отмена</button>
-          <button type="submit" class="btn btn-primary">Провести платеж</button>
+          <button type="submit" id="add-payment-submit-btn" class="btn btn-primary">Провести платеж</button>
         </div>
       </form>
     </div>
   </div>
 
-  <!-- Контейнер простых уведомлений -->
+  <!-- Контейнер всплывающих уведомлений -->
   <div id="toast-rack" class="toast-rack"></div>
 
   <script src="app.js"></script>
