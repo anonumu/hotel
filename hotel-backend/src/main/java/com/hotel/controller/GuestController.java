@@ -45,10 +45,12 @@ public class GuestController {
         return ResponseEntity.ok(guestService.updateGuest(id, dto));
     }
 
-    // Заселение гостя
+    // Заселение гостя (с опциональным указанием номера)
     @PostMapping("/{id}/checkin")
-    public ResponseEntity<Guest> checkInGuest(@PathVariable Long id) {
-        return ResponseEntity.ok(guestService.checkInGuest(id));
+    public ResponseEntity<Guest> checkInGuest(
+            @PathVariable Long id,
+            @RequestParam(required = false) Long roomId) {
+        return ResponseEntity.ok(guestService.checkInGuest(id, roomId));
     }
 
     // Выселение гостя

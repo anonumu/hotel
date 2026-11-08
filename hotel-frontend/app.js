@@ -3,7 +3,7 @@
 // Студент: Сигналов Владислав Алексеевич (Группа 3 ИС-3)
 // Преподаватель: Самсонов Илья Валерьевич
 //
-// Интеграция: REST API Spring Boot (порт 8080) с автономным отказоустойчивым ядром
+// Архитектура: Интерактивный поэтажный план отеля, защита от некорректных действий
 // ==========================================================================
 
 const API_BASE = 'http://localhost:8080/api/v1';
@@ -53,7 +53,7 @@ const store = {
   ]
 };
 
-// Справочники наименований
+// Справочники системы
 const LABELS = {
   types: {
     STANDARD: 'Стандарт',
@@ -90,18 +90,28 @@ const LABELS = {
   }
 };
 
-// Форматирование суммы в рубли
+// Экранирование вывода для защиты от XSS
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+// Форматирование сумм
 function formatRub(val) {
   return `${(Number(val) || 0).toLocaleString('ru-RU')} ₽`;
 }
 
-// Управление отображением ошибок внутри модальных окон
-function showModalAlert(modalId, message, type = 'error') {
+// Отображение ошибок внутри модальных окон
+function showModalAlert(modalId, message) {
   const alertEl = document.getElementById(`${modalId}-alert`);
   if (!alertEl) return;
   alertEl.style.display = 'flex';
-  alertEl.className = type === 'error' ? 'modal-alert' : 'modal-alert is-success';
-  alertEl.innerHTML = `<strong>${type === 'error' ? 'Внимание:' : 'Успешно:'}</strong> <span>${message}</span>`;
+  alertEl.innerHTML = `<strong>Внимание:</strong> <span>${escapeHtml(message)}</span>`;
 }
 
 function clearModalAlert(modalId) {
@@ -110,23 +120,19 @@ function clearModalAlert(modalId) {
     alertEl.style.display = 'none';
     alertEl.innerHTML = '';
   }
-  const modalBox = document.getElementById(modalId);
-  if (modalBox) {
-    modalBox.querySelectorAll('.form-control').forEach(input => input.classList.remove('is-invalid'));
-  }
 }
 
-// Проверка соединения с Spring Boot бэкендом
+// Проверка соединения с Spring Boot
 async function checkBackendConnection(manual = false) {
   try {
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 2500);
+    const timer = setTimeout(() => ctrl.abort(), 2000);
     const res = await fetch(`${API_BASE}/rooms`, { signal: ctrl.signal });
     clearTimeout(timer);
     if (res.ok) {
       isApiOnline = true;
       syncServerStatus(true);
-      if (manual) notify('Связь с сервером Spring Boot подтверждена');
+      if (manual) notify('Связь с сервером Spring Boot установлена');
       return true;
     }
   } catch (e) {
@@ -141,15 +147,11 @@ async function checkBackendConnection(manual = false) {
 function syncServerStatus(online) {
   const dot = document.getElementById('server-status-dot');
   const txt = document.getElementById('server-status-label');
-  if (dot) {
-    dot.className = `status-dot ${online ? 'online' : 'offline'}`;
-  }
-  if (txt) {
-    txt.innerText = online ? 'REST API активен (порт 8080)' : 'Автономный режим (Демо)';
-  }
+  if (dot) dot.className = `server-dot ${online ? '' : 'offline'}`;
+  if (txt) txt.innerText = online ? 'REST API активен (порт 8080)' : 'Автономный режим (Демо)';
 }
 
-// Запросы к REST API: защищены от падения и не переключают в оффлайн при 4xx ошибках
+// Запросы к REST API с защитой от сбоев
 async function api(endpoint, options = {}) {
   if (isApiOnline) {
     let res;
@@ -159,26 +161,20 @@ async function api(endpoint, options = {}) {
         ...options
       });
     } catch (networkError) {
-      // Исключительно сетевая ошибка соединения (сервер отключен)
-      console.warn('Сервер отключен по сети:', networkError.message);
+      console.warn('Сервер отключен:', networkError.message);
       isApiOnline = false;
       syncServerStatus(false);
       notify('Сервер отключен: переключено в автономный режим', 'err');
       return mockApi(endpoint, options);
     }
 
-    // Если сервер ответил — сервер работает! Обрабатываем HTTP статус
     if (!res.ok) {
       let errorMsg = `Ошибка запроса (${res.status})`;
       try {
         const errJson = await res.json();
-        if (errJson && errJson.message) {
-          errorMsg = errJson.message;
-        } else if (errJson && errJson.error) {
-          errorMsg = errJson.error;
-        }
+        if (errJson && errJson.message) errorMsg = errJson.message;
+        else if (errJson && errJson.error) errorMsg = errJson.error;
       } catch (_) {}
-      
       const error = new Error(errorMsg);
       error.status = res.status;
       throw error;
@@ -188,11 +184,10 @@ async function api(endpoint, options = {}) {
     return await res.json();
   }
 
-  // Автономная работа (Демо)
   return mockApi(endpoint, options);
 }
 
-// Полнофункциональное автономное ядро с зеркальной бизнес-логикой
+// Автономное ядро для работы без запущенного бэкенда
 function mockApi(endpoint, options = {}) {
   const method = options.method || 'GET';
   const data = options.body ? JSON.parse(options.body) : null;
@@ -204,10 +199,10 @@ function mockApi(endpoint, options = {}) {
       const num = (data.roomNumber || '').trim();
       if (!num) throw new Error('Номер комнаты обязателен для заполнения');
       if (store.rooms.some(r => r.roomNumber.toLowerCase() === num.toLowerCase())) {
-        throw new Error(`Номер комнаты ${num} уже существует в системе`);
+        throw new Error(`Номер комнаты ${num} уже существует в фонде`);
       }
       if (!data.pricePerNight || Number(data.pricePerNight) <= 0) {
-        throw new Error('Стоимость за сутки должна быть больше нуля');
+        throw new Error('Стоимость за сутки должна быть строго больше нуля');
       }
       if (!data.maxGuests || Number(data.maxGuests) <= 0) {
         throw new Error('Вместимость номера должна быть не менее 1 человека');
@@ -231,18 +226,22 @@ function mockApi(endpoint, options = {}) {
       const id = parseInt(match[1]);
       const room = store.rooms.find(r => r.id === id);
       if (endpoint.endsWith('/status') && method === 'PATCH') {
-        if (room) room.status = data.status;
+        if (room) {
+          // Защита от дурака: нельзя освободить номер, если в нем кто-то проживает
+          if (data.status === 'AVAILABLE') {
+            const hasActiveOccupant = store.guests.some(g => g.checkedIn && store.bookings.some(b => b.guestId === g.id && b.roomId === id && b.status === 'CHECKED_IN'));
+            if (hasActiveOccupant) {
+              throw new Error(`В номере № ${room.roomNumber} сейчас проживает гость. Сначала оформите выселение.`);
+            }
+          }
+          room.status = data.status;
+        }
         return room;
       }
       if (method === 'DELETE') {
-        const bookings = store.bookings.filter(b => (b.roomId === id || (b.room && b.room.id === id)));
+        const bookings = store.bookings.filter(b => b.roomId === id);
         if (bookings.length > 0) {
-          const active = bookings.some(b => b.status !== 'CANCELLED');
-          if (active) {
-            throw new Error(`Нельзя удалить номер № ${room ? room.roomNumber : id}, к нему привязаны активные бронирования.`);
-          } else {
-            throw new Error(`Нельзя удалить номер № ${room ? room.roomNumber : id}, сохранена история бронирований. Рекомендуется статус 'Ремонт'.`);
-          }
+          throw new Error(`Нельзя удалить номер № ${room ? room.roomNumber : id}, к нему привязаны бронирования`);
         }
         store.rooms = store.rooms.filter(r => r.id !== id);
         return null;
@@ -253,9 +252,6 @@ function mockApi(endpoint, options = {}) {
 
   // 2. Бронирования
   if (endpoint.startsWith('/bookings')) {
-    if (endpoint.startsWith('/bookings/availability')) {
-      return store.rooms.filter(r => r.status === 'AVAILABLE');
-    }
     if (endpoint === '/bookings' && method === 'GET') {
       return store.bookings.map(b => ({
         ...b,
@@ -275,25 +271,15 @@ function mockApi(endpoint, options = {}) {
       }
 
       const room = store.rooms.find(r => r.id === roomId);
-      if (!room) throw new Error('Выбранный номер не найден');
+      if (!room) throw new Error('Номер не найден');
       if (room.status === 'OUT_OF_ORDER') throw new Error(`Номер ${room.roomNumber} находится на ремонте`);
 
       const guest = store.guests.find(g => g.id === guestId);
-      if (!guest) throw new Error('Выбранный гость не найден');
+      if (!guest) throw new Error('Гость не найден');
 
       const guestCount = parseInt(data.guestCount) || 1;
       if (guestCount > room.maxGuests) {
         throw new Error(`Количество гостей (${guestCount}) превышает вместимость номера (${room.maxGuests})`);
-      }
-
-      // Проверка наложения дат
-      const overlaps = store.bookings.filter(b => {
-        if (b.roomId !== roomId) return false;
-        if (b.status === 'CANCELLED') return false;
-        return (new Date(checkIn) < new Date(b.checkOutDate) && new Date(checkOut) > new Date(b.checkInDate));
-      });
-      if (overlaps.length > 0) {
-        throw new Error(`Номер ${room.roomNumber} уже занят на выбранные даты другим бронированием`);
       }
 
       const diffTime = Math.abs(new Date(checkOut) - new Date(checkIn));
@@ -329,7 +315,7 @@ function mockApi(endpoint, options = {}) {
     }
   }
 
-  // 3. Гости
+  // 3. Гости и заселение
   if (endpoint.startsWith('/guests')) {
     if (endpoint === '/guests' && method === 'GET') return [...store.guests];
     if (endpoint === '/guests' && method === 'POST') {
@@ -354,37 +340,88 @@ function mockApi(endpoint, options = {}) {
       store.guests.push(g);
       return g;
     }
-    const match = endpoint.match(/\/guests\/(\d+)/);
-    if (match) {
-      const id = parseInt(match[1]);
-      const guest = store.guests.find(g => g.id === id);
-      if (endpoint.endsWith('/checkin') && method === 'POST') {
-        if (guest) {
-          if (guest.checkedIn) throw new Error(`Гость ${guest.firstName} ${guest.lastName} уже заселен`);
-          guest.checkedIn = true;
-          guest.checkInDate = new Date().toISOString().split('T')[0];
-          const b = store.bookings.find(x => x.guestId === id && (x.status === 'CONFIRMED' || x.status === 'PENDING'));
-          if (b) {
-            b.status = 'CHECKED_IN';
-            const r = store.rooms.find(x => x.id === b.roomId);
-            if (r) r.status = 'OCCUPIED';
-          }
+
+    const checkInMatch = endpoint.match(/\/guests\/(\d+)\/checkin/);
+    if (checkInMatch && method === 'POST') {
+      const guestId = parseInt(checkInMatch[1]);
+      const guest = store.guests.find(g => g.id === guestId);
+      if (!guest) throw new Error('Гость не найден');
+      if (guest.checkedIn) throw new Error(`Гость ${guest.firstName} ${guest.lastName} уже заселен в номер`);
+
+      const urlObj = new URL('http://dummy.com' + endpoint);
+      const roomIdParam = urlObj.searchParams.get('roomId');
+      const today = new Date().toISOString().split('T')[0];
+
+      if (roomIdParam) {
+        const roomId = parseInt(roomIdParam);
+        const room = store.rooms.find(r => r.id === roomId);
+        if (!room) throw new Error('Номер не найден');
+        if (room.status === 'OCCUPIED') throw new Error(`Номер ${room.roomNumber} уже занят другим гостем`);
+        if (room.status === 'CLEANING') throw new Error(`Номер ${room.roomNumber} на уборке. Дождитесь завершения.`);
+        if (room.status === 'OUT_OF_ORDER') throw new Error(`Номер ${room.roomNumber} находится на ремонте`);
+
+        room.status = 'OCCUPIED';
+        guest.checkedIn = true;
+        guest.checkInDate = today;
+
+        // Привязываем существующую или создаем новую бронь
+        let b = store.bookings.find(x => x.guestId === guestId && (x.status === 'CONFIRMED' || x.status === 'PENDING'));
+        if (b) {
+          b.roomId = roomId;
+          b.status = 'CHECKED_IN';
+          guest.checkOutDate = b.checkOutDate;
+        } else {
+          const outDate = new Date();
+          outDate.setDate(new Date().getDate() + 3);
+          const outDateStr = outDate.toISOString().split('T')[0];
+          guest.checkOutDate = outDateStr;
+
+          store.bookings.push({
+            id: Date.now(),
+            roomId: roomId,
+            guestId: guestId,
+            checkInDate: today,
+            checkOutDate: outDateStr,
+            status: 'CHECKED_IN',
+            totalPrice: room.pricePerNight * 3,
+            guestCount: Math.min(2, room.maxGuests),
+            createdAt: new Date().toISOString()
+          });
         }
         return guest;
       }
-      if (endpoint.endsWith('/checkout') && method === 'POST') {
-        if (guest) {
-          if (!guest.checkedIn) throw new Error(`Гость ${guest.firstName} ${guest.lastName} не заселен`);
-          guest.checkedIn = false;
-          guest.checkOutDate = new Date().toISOString().split('T')[0];
-          const b = store.bookings.find(x => x.guestId === id && x.status === 'CHECKED_IN');
-          if (b) {
-            b.status = 'CHECKED_OUT';
-            const r = store.rooms.find(x => x.id === b.roomId);
-            if (r) r.status = 'CLEANING';
-          }
-        }
+
+      // Если roomId не передан, ищем бронь
+      let b = store.bookings.find(x => x.guestId === guestId && (x.status === 'CONFIRMED' || x.status === 'PENDING'));
+      if (b) {
+        const room = store.rooms.find(r => r.id === b.roomId);
+        if (room && room.status === 'OUT_OF_ORDER') throw new Error(`Номер ${room.roomNumber} на ремонте`);
+        if (room) room.status = 'OCCUPIED';
+        b.status = 'CHECKED_IN';
+        guest.checkedIn = true;
+        guest.checkInDate = today;
+        guest.checkOutDate = b.checkOutDate;
         return guest;
+      } else {
+        throw new Error(`У гостя ${guest.firstName} ${guest.lastName} нет активной брони. Выберите свободный номер.`);
+      }
+    }
+
+    const checkOutMatch = endpoint.match(/\/guests\/(\d+)\/checkout/);
+    if (checkOutMatch && method === 'POST') {
+      const guestId = parseInt(checkOutMatch[1]);
+      const guest = store.guests.find(g => g.id === guestId);
+      if (!guest) throw new Error('Гость не найден');
+      if (!guest.checkedIn) throw new Error(`Гость ${guest.firstName} ${guest.lastName} не заселен`);
+
+      guest.checkedIn = false;
+      guest.checkOutDate = new Date().toISOString().split('T')[0];
+
+      const b = store.bookings.find(x => x.guestId === guestId && x.status === 'CHECKED_IN');
+      if (b) {
+        b.status = 'CHECKED_OUT';
+        const r = store.rooms.find(x => x.id === b.roomId);
+        if (r) r.status = 'CLEANING';
       }
       return guest;
     }
@@ -446,7 +483,6 @@ function mockApi(endpoint, options = {}) {
     if (endpoint === '/payments' && method === 'POST') {
       const amount = parseFloat(data.amount);
       if (!amount || amount <= 0) throw new Error('Сумма платежа должна быть строго больше нуля');
-
       const bookingId = parseInt(data.bookingId);
       const b = store.bookings.find(x => x.id === bookingId);
       if (!b) throw new Error('Бронирование не найдено');
@@ -465,7 +501,7 @@ function mockApi(endpoint, options = {}) {
     }
   }
 
-  // 7. Счёт за проживание (Invoice)
+  // 7. Счёт (Invoice)
   if (endpoint.startsWith('/invoices/')) {
     const id = parseInt(endpoint.replace('/invoices/', ''));
     const b = store.bookings.find(x => x.id === id) || store.bookings[0];
@@ -500,50 +536,50 @@ function mockApi(endpoint, options = {}) {
     };
   }
 
-  // 8. Аналитические отчеты
-  if (endpoint.startsWith('/reports')) {
-    if (endpoint === '/reports/occupancy') {
-      const total = store.rooms.length;
-      const occ = store.rooms.filter(r => r.status === 'OCCUPIED').length;
-      const rate = total > 0 ? Math.round((occ / total) * 100) : 0;
-      return {
-        totalRooms: total,
-        occupiedRooms: occ,
-        occupancyRate: rate,
-        occupancyRatePercentage: rate,
-        availableRooms: store.rooms.filter(r => r.status === 'AVAILABLE').length,
-        cleaningRooms: store.rooms.filter(r => r.status === 'CLEANING').length,
-        bookedRooms: store.rooms.filter(r => r.status === 'BOOKED').length,
-        outOfOrderRooms: store.rooms.filter(r => r.status === 'OUT_OF_ORDER').length
-      };
-    }
-    if (endpoint === '/reports/revenue') {
-      const total = store.payments.reduce((acc, p) => acc + p.amount, 0);
-      const byMethod = {
-        CARD: store.payments.filter(p => p.method === 'CARD').reduce((a, b) => a + b.amount, 0),
-        CASH: store.payments.filter(p => p.method === 'CASH').reduce((a, b) => a + b.amount, 0),
-        TRANSFER: store.payments.filter(p => p.method === 'TRANSFER').reduce((a, b) => a + b.amount, 0)
-      };
-      return {
-        totalRevenue: total,
-        totalPaymentsCount: store.payments.length,
-        totalTransactions: store.payments.length,
-        revenueByPaymentMethod: byMethod,
-        revenueByMethod: byMethod
-      };
-    }
-    if (endpoint === '/reports/staff-performance') {
-      return {
-        staffStats: store.staff.map(s => ({
-          id: s.id,
-          name: `${s.firstName} ${s.lastName}`,
-          position: s.position,
-          rating: (4.7 + ((s.id % 3) * 0.1)).toFixed(1),
-          tasksCompleted: 14 + s.id * 2,
-          shift: s.id % 2 === 0 ? 'Дневная смена (08:00 - 20:00)' : 'Ночная смена (20:00 - 08:00)'
-        }))
-      };
-    }
+  // 8. Отчеты
+  if (endpoint === '/reports/occupancy') {
+    const total = store.rooms.length;
+    const occ = store.rooms.filter(r => r.status === 'OCCUPIED').length;
+    const rate = total > 0 ? Math.round((occ / total) * 100) : 0;
+    return {
+      totalRooms: total,
+      occupiedRooms: occ,
+      occupancyRate: rate,
+      occupancyRatePercentage: rate,
+      availableRooms: store.rooms.filter(r => r.status === 'AVAILABLE').length,
+      cleaningRooms: store.rooms.filter(r => r.status === 'CLEANING').length,
+      bookedRooms: store.rooms.filter(r => r.status === 'BOOKED').length,
+      outOfOrderRooms: store.rooms.filter(r => r.status === 'OUT_OF_ORDER').length
+    };
+  }
+
+  if (endpoint === '/reports/revenue') {
+    const total = store.payments.reduce((acc, p) => acc + p.amount, 0);
+    const byMethod = {
+      CARD: store.payments.filter(p => p.method === 'CARD').reduce((a, b) => a + b.amount, 0),
+      CASH: store.payments.filter(p => p.method === 'CASH').reduce((a, b) => a + b.amount, 0),
+      TRANSFER: store.payments.filter(p => p.method === 'TRANSFER').reduce((a, b) => a + b.amount, 0)
+    };
+    return {
+      totalRevenue: total,
+      totalPaymentsCount: store.payments.length,
+      totalTransactions: store.payments.length,
+      revenueByPaymentMethod: byMethod,
+      revenueByMethod: byMethod
+    };
+  }
+
+  if (endpoint === '/reports/staff-performance') {
+    return {
+      staffStats: store.staff.map(s => ({
+        id: s.id,
+        name: `${s.firstName} ${s.lastName}`,
+        position: s.position,
+        rating: (4.7 + ((s.id % 3) * 0.1)).toFixed(1),
+        tasksCompleted: 14 + s.id * 2,
+        shift: s.id % 2 === 0 ? 'Дневная смена (08:00 - 20:00)' : 'Ночная смена (20:00 - 08:00)'
+      }))
+    };
   }
 
   return null;
@@ -553,7 +589,7 @@ function mockApi(endpoint, options = {}) {
 // НАВИГАЦИЯ МЕЖДУ РАЗДЕЛАМИ
 // ==========================================================================
 function setupNavigation() {
-  document.querySelectorAll('.nav-link').forEach(btn => {
+  document.querySelectorAll('.nav-item').forEach(btn => {
     btn.addEventListener('click', () => {
       const view = btn.dataset.view;
       if (view) navigateTo(view);
@@ -563,10 +599,10 @@ function setupNavigation() {
 
 function navigateTo(viewName) {
   document.querySelectorAll('.screen-view').forEach(s => s.classList.remove('active'));
-  document.querySelectorAll('.nav-link').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
 
   const target = document.getElementById(`view-${viewName}`);
-  const btn = document.querySelector(`.nav-link[data-view="${viewName}"]`);
+  const btn = document.querySelector(`.nav-item[data-view="${viewName}"]`);
   if (target) target.classList.add('active');
   if (btn) btn.classList.add('active');
 
@@ -582,16 +618,26 @@ function navigateTo(viewName) {
 }
 
 // ==========================================================================
-// 1. ДАШБОРД (Главная страница)
+// 1. ДАШБОРД И АРХИТЕКТУРНЫЙ ПОЭТАЖНЫЙ ПЛАН
 // ==========================================================================
+let globalRoomsCache = [];
+let globalGuestsCache = [];
+let globalBookingsCache = [];
+let currentFloorFilter = 'all';
+
 async function renderDashboard() {
-  const [rooms, guests, rev] = await Promise.all([
+  const [rooms, guests, rev, bookings] = await Promise.all([
     api('/rooms'),
     api('/guests'),
-    api('/reports/revenue')
+    api('/reports/revenue'),
+    api('/bookings')
   ]);
 
   if (!rooms) return;
+
+  globalRoomsCache = rooms;
+  globalGuestsCache = guests || [];
+  globalBookingsCache = bookings || [];
 
   const total = rooms.length;
   const occupied = rooms.filter(r => r.status === 'OCCUPIED').length;
@@ -611,61 +657,274 @@ async function renderDashboard() {
   const revEl = document.getElementById('dash-kpi-rev');
   if (revEl) revEl.innerText = formatRub(rev?.totalRevenue || 0);
 
-  // Интерактивная карта номеров
-  const matrix = document.getElementById('dash-matrix');
-  if (matrix) {
-    matrix.innerHTML = rooms.map(r => `
-      <div class="room-cell ${r.status}" onclick="openRoomStatusModal(${r.id}, '${r.roomNumber}', '${r.status}')" title="Кликните для изменения статуса">
-        <div>
-          <div class="room-num-tag">№ ${r.roomNumber}</div>
-          <div class="room-type-tag">${LABELS.types[r.type] || r.type}</div>
-        </div>
-        <div>
-          <div style="font-size:11px; font-weight:700; color:var(--text-main); margin-top:6px">${formatRub(r.pricePerNight)}</div>
-          <div class="room-status-badge ${r.status}">${LABELS.roomStatuses[r.status] || r.status}</div>
-        </div>
-      </div>
-    `).join('');
-  }
+  // Отрисовка коридоров этажей с интерактивными дверями
+  renderFloorCorridors(rooms, currentFloorFilter);
 
-  // Текущие постояльцы
-  const tbody = document.getElementById('dash-arrivals');
-  if (tbody && guests) {
-    const activeGuests = guests.filter(g => g.checkedIn);
-    if (activeGuests.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:20px">В данный момент проживающих гостей нет</td></tr>';
-    } else {
-      tbody.innerHTML = activeGuests.map(g => `
-        <tr>
-          <td><strong>${g.firstName} ${g.lastName}</strong></td>
-          <td>${g.phone}</td>
-          <td>${g.passportNumber}</td>
-          <td><span class="badge badge-OCCUPIED">Проживает</span></td>
-          <td>
-            <button class="btn btn-xs btn-outline" onclick="checkOutGuest(${g.id})">
-              Выселить
-            </button>
-          </td>
-        </tr>
-      `).join('');
-    }
-  }
+  // Отрисовка текущих постояльцев в номерах
+  renderCurrentOccupantsTable();
 
   updateNavCounts({
     rooms: rooms.length,
-    guests: guests ? guests.length : 0
+    guests: globalGuestsCache.length,
+    bookings: globalBookingsCache.length
   });
+}
+
+// Фильтрация этажей
+function filterFloorView(floor) {
+  currentFloorFilter = floor;
+  document.querySelectorAll('.floor-tab-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.innerText.includes(floor === 'all' ? 'Все' : `${floor}-й`));
+  });
+  renderFloorCorridors(globalRoomsCache, floor);
+}
+
+// Поэтажная отрисовка дверей
+function renderFloorCorridors(rooms, selectedFloor) {
+  const container = document.getElementById('floor-corridors-list');
+  if (!container) return;
+
+  // Группировка комнат по этажам
+  const floorsMap = {};
+  rooms.forEach(r => {
+    const f = r.floor || 1;
+    if (!floorsMap[f]) floorsMap[f] = [];
+    floorsMap[f].push(r);
+  });
+
+  const floorNumbers = Object.keys(floorsMap).map(Number).sort((a, b) => a - b);
+  const floorsToShow = selectedFloor === 'all' ? floorNumbers : [Number(selectedFloor)];
+
+  if (floorsToShow.length === 0 || !floorsMap[floorsToShow[0]]) {
+    container.innerHTML = '<div style="text-align:center; padding:30px; color:var(--text-muted)">Номера на выбранном этаже не найдены</div>';
+    return;
+  }
+
+  const floorTitles = {
+    1: '1-й этаж • Базовый уровень (Номера 101 — 102)',
+    2: '2-й этаж • Повышенная комфортность (Номера 201 — 202)',
+    3: '3-й этаж • Представительский уровень (Номера 301 — 302)',
+    4: '4-й этаж • Президентский пентхаус (Номер 401)'
+  };
+
+  container.innerHTML = floorsToShow.map(fNum => {
+    const fRooms = floorsMap[fNum] || [];
+    const occCount = fRooms.filter(r => r.status === 'OCCUPIED').length;
+
+    return `
+      <div class="floor-corridor-wing">
+        <div class="corridor-header">
+          <div class="floor-title-badge">
+            <span>Этаж ${fNum}</span>
+            <span class="floor-type-desc">${floorTitles[fNum] || 'Жилой этаж'}</span>
+          </div>
+          <div class="corridor-stats">
+            Занятость: <strong>${occCount} из ${fRooms.length} номеров</strong>
+          </div>
+        </div>
+
+        <div class="corridor-doors-grid">
+          ${fRooms.map(r => generateDoorHtml(r)).join('')}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// Генерация разметки реалистичной двери с всплывающим окном
+function generateDoorHtml(room) {
+  // Поиск активной брони и гостя для этого номера
+  const activeBook = globalBookingsCache.find(b => (b.roomId === room.id || (b.room && b.room.id === room.id)) && b.status !== 'CANCELLED');
+  let occupantName = null;
+  let datesText = null;
+  let guestPhone = null;
+
+  if (activeBook) {
+    const guest = activeBook.guest || globalGuestsCache.find(g => g.id === (activeBook.guestId || activeBook.guest_id));
+    if (guest) {
+      occupantName = `${guest.firstName} ${guest.lastName}`;
+      guestPhone = guest.phone;
+      datesText = `${activeBook.checkInDate} &rarr; ${activeBook.checkOutDate}`;
+    }
+  }
+
+  // Описание для всплывающей карточки
+  let statusDetailHtml = '';
+  if (room.status === 'OCCUPIED') {
+    statusDetailHtml = `
+      <div class="popover-guest-box">
+        <div class="title">Проживающий постоялец:</div>
+        <div style="font-weight:700; color:var(--text-main)">${escapeHtml(occupantName || 'Постоялец')}</div>
+        <div style="color:var(--text-muted); font-size:11px; margin-top:2px">${datesText || 'Период не указан'}</div>
+        ${guestPhone ? `<div style="color:var(--text-secondary); font-size:11px">${escapeHtml(guestPhone)}</div>` : ''}
+      </div>
+    `;
+  } else if (room.status === 'BOOKED') {
+    statusDetailHtml = `
+      <div class="popover-guest-box">
+        <div class="title">Бронь оформлена на:</div>
+        <div style="font-weight:700; color:var(--text-main)">${escapeHtml(occupantName || 'Гость')}</div>
+        <div style="color:var(--text-muted); font-size:11px; margin-top:2px">Заезд ожидается: ${datesText || 'В ближайшие дни'}</div>
+      </div>
+    `;
+  } else if (room.status === 'CLEANING') {
+    statusDetailHtml = `
+      <div class="popover-guest-box" style="background:#f1f5f9">
+        <div class="title">Статус обслуживания:</div>
+        <div style="color:var(--text-secondary)">Санитарная обработка и смена белья горничной</div>
+      </div>
+    `;
+  } else if (room.status === 'AVAILABLE') {
+    statusDetailHtml = `
+      <div class="popover-guest-box" style="background:#f2f7f2">
+        <div class="title" style="color:#2b5932">Готовность:</div>
+        <div style="color:#2b5932; font-weight:600">Номер полностью чист, проверен и готов к заселению</div>
+      </div>
+    `;
+  } else {
+    statusDetailHtml = `
+      <div class="popover-guest-box" style="background:#f5f4f2">
+        <div class="title">Техническое обслуживание:</div>
+        <div style="color:var(--text-muted)">Плановый ремонт оборудования</div>
+      </div>
+    `;
+  }
+
+  const amenities = {
+    STANDARD: ['Двуспальная кровать', 'Wi-Fi', 'Душ', 'ТВ'],
+    SUPERIOR: ['Кровать King-size', 'Балкон', 'Рабочая зона', 'Wi-Fi'],
+    DELUXE: ['Панорамный вид', 'Ванна', 'Мини-бар', 'Сейф'],
+    SUITE: ['2 комнаты', 'Гостиная', 'Кофемашина', 'Халаты'],
+    PRESIDENTIAL: ['Терраса', 'Персональный сервис', 'Джакузи', 'Панорама']
+  };
+  const amenList = amenities[room.type] || ['Wi-Fi', 'Кондиционер'];
+
+  return `
+    <div class="door-wrapper">
+      <!-- Реалистичная дверь номера -->
+      <div class="hotel-door ${room.status}" onclick="openRoomStatusModal(${room.id}, '${room.roomNumber}', '${room.status}')">
+        <!-- Латунная табличка с номером -->
+        <div class="door-plaque">
+          <div class="door-number">${room.roomNumber}</div>
+          <div class="door-category-label">${LABELS.types[room.type] || room.type}</div>
+        </div>
+
+        <!-- Электронный замок и ручка -->
+        <div class="door-handle-lock">
+          <div class="lock-sensor">
+            <span class="lock-led"></span>
+            <span>Key</span>
+          </div>
+          <div class="door-handle-hardware"></div>
+        </div>
+
+        <!-- Табличка на ручке -->
+        <div>
+          <div class="door-hanger-card ${room.status}">
+            ${LABELS.roomStatuses[room.status] || room.status}
+          </div>
+          <div class="door-price-tag">${formatRub(room.pricePerNight)}/сут.</div>
+        </div>
+
+        <!-- Мягкая подсветка порога -->
+        <div class="door-threshold"></div>
+      </div>
+
+      <!-- ВСПЛЫВАЮЩАЯ КАРТОЧКА ПРИ НАВЕДЕНИИ -->
+      <div class="door-popover">
+        <div class="popover-header">
+          <div>
+            <div class="popover-suite-title">Номер ${room.roomNumber}</div>
+            <div class="popover-suite-type">${LABELS.types[room.type] || room.type} • ${room.floor} этаж</div>
+          </div>
+          <div class="popover-status-badge door-hanger-card ${room.status}" style="margin:0; padding:3px 8px">
+            ${LABELS.roomStatuses[room.status] || room.status}
+          </div>
+        </div>
+
+        <div class="popover-details-list">
+          <div class="popover-detail-row">
+            <span>Тариф за сутки:</span>
+            <strong>${formatRub(room.pricePerNight)}</strong>
+          </div>
+          <div class="popover-detail-row">
+            <span>Вместимость:</span>
+            <strong>до ${room.maxGuests} гостей</strong>
+          </div>
+        </div>
+
+        ${statusDetailHtml}
+
+        <div class="popover-amenities-tags">
+          ${amenList.map(a => `<span class="amenity-tag">${a}</span>`).join('')}
+        </div>
+
+        <div class="popover-actions">
+          <button class="btn btn-xs btn-secondary" style="flex:1" onclick="openRoomStatusModal(${room.id}, '${room.roomNumber}', '${room.status}')">
+            Статус
+          </button>
+          ${room.status === 'AVAILABLE' ? `
+            <button class="btn btn-xs btn-brass" style="flex:1" onclick="openBookingWithRoom(${room.id})">
+              Забронировать
+            </button>
+          ` : ''}
+          ${activeBook ? `
+            <button class="btn btn-xs btn-primary" style="flex:1" onclick="openInvoiceSheet(${activeBook.id})">
+              Счёт
+            </button>
+          ` : ''}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// Отрисовка постояльцев в сводке
+function renderCurrentOccupantsTable() {
+  const tbody = document.getElementById('dash-arrivals');
+  if (!tbody) return;
+
+  const activeGuests = globalGuestsCache.filter(g => g.checkedIn);
+  if (activeGuests.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:24px">В данный момент проживающих гостей нет</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = activeGuests.map(g => {
+    // Находим привязанную бронь и номер
+    const b = globalBookingsCache.find(x => x.guestId === g.id && x.status === 'CHECKED_IN');
+    const room = b ? globalRoomsCache.find(r => r.id === (b.roomId || b.room_id)) : null;
+
+    return `
+      <tr>
+        <td><strong>${escapeHtml(g.firstName)} ${escapeHtml(g.lastName)}</strong></td>
+        <td>
+          ${room ? `
+            <span class="room-assigned-pill">
+              № ${room.roomNumber} (${LABELS.types[room.type] || room.type})
+            </span>
+          ` : `<span style="color:var(--text-dim)">Номер не определен</span>`}
+        </td>
+        <td>${escapeHtml(g.phone)}</td>
+        <td><code>${escapeHtml(g.passportNumber)}</code></td>
+        <td>${b ? `${b.checkInDate} &rarr; ${b.checkOutDate}` : 'Проживает'}</td>
+        <td>
+          <button class="btn btn-xs btn-secondary" onclick="checkOutGuest(${g.id})">
+            Выселить
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
 }
 
 // ==========================================================================
 // 2. НОМЕРНОЙ ФОНД
 // ==========================================================================
-let allLoadedRooms = [];
-
 async function renderRooms() {
   const rooms = await api('/rooms');
   if (!rooms) return;
-  allLoadedRooms = rooms;
+  globalRoomsCache = rooms;
   updateNavCounts({ rooms: rooms.length });
   displayRoomsTable(rooms);
 }
@@ -685,9 +944,9 @@ function displayRoomsTable(rooms) {
       <td>${LABELS.types[r.type] || r.type}</td>
       <td>${r.floor} этаж</td>
       <td>${r.maxGuests} чел.</td>
-      <td><strong style="color:var(--primary-accent)">${formatRub(r.pricePerNight)}</strong></td>
+      <td><strong>${formatRub(r.pricePerNight)}</strong></td>
       <td>
-        <span class="badge badge-${r.status}">
+        <span class="door-hanger-card ${r.status}" style="display:inline-block; padding:3px 8px; margin:0">
           ${LABELS.roomStatuses[r.status] || r.status}
         </span>
       </td>
@@ -709,7 +968,7 @@ function filterRoomsList() {
   const search = (document.getElementById('room-search-input')?.value || '').trim().toLowerCase();
   const status = document.getElementById('room-status-filter')?.value || '';
 
-  const filtered = allLoadedRooms.filter(r => {
+  const filtered = globalRoomsCache.filter(r => {
     const matchNum = !search || r.roomNumber.toLowerCase().includes(search);
     const matchStatus = !status || r.status === status;
     return matchNum && matchStatus;
@@ -729,55 +988,57 @@ async function renderBookings() {
   ]);
 
   if (!books) return;
+  globalBookingsCache = books;
   updateNavCounts({ bookings: books.length });
 
   const tbody = document.getElementById('bookings-tbody');
   if (tbody) {
     if (books.length === 0) {
       tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:24px">Бронирований пока нет</td></tr>';
-    } else {
-      tbody.innerHTML = books.map(b => {
-        const room = b.room || (rooms ? rooms.find(r => r.id === (b.roomId || b.room_id)) : null);
-        const guest = b.guest || (guests ? guests.find(g => g.id === (b.guestId || b.guest_id)) : null);
-
-        return `
-          <tr>
-            <td><strong>#${b.id}</strong></td>
-            <td>
-              <strong>${guest ? `${guest.firstName} ${guest.lastName}` : 'Гость #' + (b.guestId || b.id)}</strong>
-              <div style="font-size:11.5px; color:var(--text-muted)">${guest?.phone || ''}</div>
-            </td>
-            <td>
-              <strong>№ ${room?.roomNumber || '—'}</strong>
-              <div style="font-size:11.5px; color:var(--text-muted)">${LABELS.types[room?.type] || ''}</div>
-            </td>
-            <td>${b.checkInDate} &rarr; ${b.checkOutDate}</td>
-            <td><strong style="color:var(--text-main)">${formatRub(b.totalPrice)}</strong></td>
-            <td>
-              <span class="badge badge-${b.status}">
-                ${LABELS.bookingStatuses[b.status] || b.status}
-              </span>
-            </td>
-            <td>
-              <div style="display:flex; gap:6px">
-                <button class="btn btn-xs btn-outline" onclick="openInvoiceSheet(${b.id})">
-                  Счёт
-                </button>
-                ${b.status !== 'CANCELLED' ? `
-                  <button class="btn btn-xs btn-danger" onclick="cancelBooking(${b.id})">
-                    Отмена
-                  </button>
-                ` : ''}
-              </div>
-            </td>
-          </tr>
-        `;
-      }).join('');
+      return;
     }
+
+    tbody.innerHTML = books.map(b => {
+      const room = b.room || (rooms ? rooms.find(r => r.id === (b.roomId || b.room_id)) : null);
+      const guest = b.guest || (guests ? guests.find(g => g.id === (b.guestId || b.guest_id)) : null);
+
+      return `
+        <tr>
+          <td><strong>#${b.id}</strong></td>
+          <td>
+            <strong>${guest ? `${escapeHtml(guest.firstName)} ${escapeHtml(guest.lastName)}` : 'Гость #' + b.guestId}</strong>
+            <div style="font-size:11px; color:var(--text-muted)">${guest?.phone || ''}</div>
+          </td>
+          <td>
+            <strong>№ ${room?.roomNumber || '—'}</strong>
+            <div style="font-size:11px; color:var(--text-muted)">${LABELS.types[room?.type] || ''}</div>
+          </td>
+          <td>${b.checkInDate} &rarr; ${b.checkOutDate}</td>
+          <td><strong>${formatRub(b.totalPrice)}</strong></td>
+          <td>
+            <span class="door-hanger-card ${b.status === 'CONFIRMED' ? 'BOOKED' : (b.status === 'CHECKED_IN' ? 'OCCUPIED' : 'CLEANING')}" style="display:inline-block; padding:2px 7px; margin:0">
+              ${LABELS.bookingStatuses[b.status] || b.status}
+            </span>
+          </td>
+          <td>
+            <div style="display:flex; gap:6px">
+              <button class="btn btn-xs btn-secondary" onclick="openInvoiceSheet(${b.id})">
+                Счёт
+              </button>
+              ${b.status !== 'CANCELLED' ? `
+                <button class="btn btn-xs btn-danger" onclick="cancelBooking(${b.id})">
+                  Отмена
+                </button>
+              ` : ''}
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
   }
 }
 
-// Заполнение выпадающих списков при бронировании
+// Заполнение выпадающих списков при создании брони
 async function populateBookingSelects() {
   try {
     const [rooms, guests] = await Promise.all([api('/rooms'), api('/guests')]);
@@ -800,7 +1061,6 @@ async function populateBookingSelects() {
       `).join('');
     }
 
-    // Установка дат по умолчанию (заезд сегодня, выезд через 3 дня)
     const today = new Date();
     const inDateStr = today.toISOString().split('T')[0];
     const outDate = new Date();
@@ -812,50 +1072,223 @@ async function populateBookingSelects() {
     if (inEl && !inEl.value) inEl.value = inDateStr;
     if (outEl && !outEl.value) outEl.value = outDateStr;
   } catch (e) {
-    console.warn('Ошибка заполнения списков бронирования:', e);
+    console.warn('Ошибка списков бронирования:', e);
   }
 }
 
+// Открытие окна бронирования с предвыбранным номером
+function openBookingWithRoom(roomId) {
+  openModal('modal-add-booking');
+  const rSel = document.getElementById('newbook-room');
+  if (rSel) rSel.value = roomId;
+}
+
 // ==========================================================================
-// 4. ГОСТИ
+// 4. СЛУЖБА ПРИЕМА И ГОСТИ (Ясная привязка к номеру и быстрое заселение)
 // ==========================================================================
 async function renderGuests() {
-  const guests = await api('/guests');
+  const [guests, bookings, rooms] = await Promise.all([
+    api('/guests'),
+    api('/bookings'),
+    api('/rooms')
+  ]);
+
   if (!guests) return;
+  globalGuestsCache = guests;
+  globalBookingsCache = bookings || [];
+  globalRoomsCache = rooms || [];
   updateNavCounts({ guests: guests.length });
 
   const tbody = document.getElementById('guests-tbody');
-  if (tbody) {
-    if (guests.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:24px">Гости не зарегистрированы</td></tr>';
-      return;
+  if (!tbody) return;
+
+  if (guests.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:24px">Гости не зарегистрированы</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = guests.map(g => {
+    // Находим активную бронь этого гостя (с поддержкой разных форматов DTO)
+    const confirmedBooking = globalBookingsCache.find(b => 
+      ((b.guestId === g.id) || (b.guest_id === g.id) || (b.guest && b.guest.id === g.id)) && 
+      (b.status === 'CONFIRMED' || b.status === 'PENDING')
+    );
+    const checkedInBooking = globalBookingsCache.find(b => 
+      ((b.guestId === g.id) || (b.guest_id === g.id) || (b.guest && b.guest.id === g.id)) && 
+      b.status === 'CHECKED_IN'
+    );
+
+    let assignedRoomInfo = '<span style="color:var(--text-dim)">Бронь не оформлена</span>';
+    let checkInActionBtn = '';
+
+    if (g.checkedIn && checkedInBooking) {
+      const bRoomId = checkedInBooking.roomId || checkedInBooking.room_id || (checkedInBooking.room && checkedInBooking.room.id);
+      const room = globalRoomsCache.find(r => r.id === bRoomId);
+      assignedRoomInfo = `
+        <span class="room-assigned-pill">
+          № ${room ? room.roomNumber : bRoomId} (${room ? LABELS.types[room.type] || room.type : ''})
+        </span>
+        <div style="font-size:11px; color:var(--text-muted); margin-top:2px">${checkedInBooking.checkInDate} &rarr; ${checkedInBooking.checkOutDate}</div>
+      `;
+      checkInActionBtn = `
+        <button class="btn btn-xs btn-secondary" onclick="checkOutGuest(${g.id})">
+          Выселить
+        </button>
+      `;
+    } else if (confirmedBooking) {
+      const bRoomId = confirmedBooking.roomId || confirmedBooking.room_id || (confirmedBooking.room && confirmedBooking.room.id);
+      const room = globalRoomsCache.find(r => r.id === bRoomId);
+      assignedRoomInfo = `
+        <span class="room-assigned-pill" style="border-color:#d4c8b6">
+          Забронирован № ${room ? room.roomNumber : bRoomId}
+        </span>
+        <div style="font-size:11px; color:var(--text-muted); margin-top:2px">${confirmedBooking.checkInDate} &rarr; ${confirmedBooking.checkOutDate}</div>
+      `;
+      checkInActionBtn = `
+        <button class="btn btn-xs btn-brass" onclick="checkInGuest(${g.id})">
+          Заселить в № ${room ? room.roomNumber : ''}
+        </button>
+      `;
+    } else {
+      // У гостя нет брони: кнопка быстрого подбора свободного номера
+      checkInActionBtn = `
+        <button class="btn btn-xs btn-primary" onclick="openQuickCheckInModal(${g.id})">
+          Заселить в номер...
+        </button>
+      `;
     }
 
-    tbody.innerHTML = guests.map(g => `
+    return `
       <tr>
-        <td><strong>${g.firstName} ${g.lastName}</strong></td>
-        <td><code>${g.passportNumber}</code></td>
-        <td>${g.phone}</td>
-        <td>${g.email}</td>
-        <td>${g.nationality || 'Россия'}</td>
         <td>
-          <span class="badge ${g.checkedIn ? 'badge-OCCUPIED' : 'badge-AVAILABLE'}">
-            ${g.checkedIn ? 'В отеле' : 'Выписан / Бронь'}
+          <strong>${escapeHtml(g.firstName)} ${escapeHtml(g.lastName)}</strong>
+          <div style="font-size:11px; color:var(--text-muted)">${escapeHtml(g.email)}</div>
+        </td>
+        <td>${assignedRoomInfo}</td>
+        <td><code>${escapeHtml(g.passportNumber)}</code></td>
+        <td>${escapeHtml(g.phone)}</td>
+        <td>${escapeHtml(g.nationality || 'Россия')}</td>
+        <td>
+          <span class="door-hanger-card ${g.checkedIn ? 'OCCUPIED' : (confirmedBooking ? 'BOOKED' : 'AVAILABLE')}" style="display:inline-block; padding:2px 8px; margin:0">
+            ${g.checkedIn ? 'Проживает' : (confirmedBooking ? 'Ожидает заезда' : 'Не заселен')}
           </span>
         </td>
-        <td>
-          ${g.checkedIn ? `
-            <button class="btn btn-xs btn-outline" onclick="checkOutGuest(${g.id})">
-              Выселить
-            </button>
-          ` : `
-            <button class="btn btn-xs btn-secondary" onclick="checkInGuest(${g.id})">
-              Заселить
-            </button>
-          `}
-        </td>
+        <td>${checkInActionBtn}</td>
       </tr>
+    `;
+  }).join('');
+}
+
+// Открытие модального окна быстрого заселения (выбор номера)
+function openQuickCheckInModal(guestId) {
+  const guest = globalGuestsCache.find(g => g.id === guestId);
+  if (!guest) return;
+
+  document.getElementById('checkin-guest-id').value = guestId;
+  document.getElementById('checkin-guest-name-box').innerText = `${guest.firstName} ${guest.lastName} (паспорт: ${guest.passportNumber})`;
+
+  // Заполняем выпадающий список только СВОБОДНЫМИ номерами
+  const roomSelect = document.getElementById('checkin-room-select');
+  const availableRooms = globalRoomsCache.filter(r => r.status === 'AVAILABLE');
+
+  if (availableRooms.length === 0) {
+    roomSelect.innerHTML = '<option value="">Нет свободных номеров для заселения</option>';
+  } else {
+    roomSelect.innerHTML = availableRooms.map(r => `
+      <option value="${r.id}" data-price="${r.pricePerNight}">
+        Номер № ${r.roomNumber} (${LABELS.types[r.type] || r.type}) • ${r.floor} этаж • ${formatRub(r.pricePerNight)}/сут.
+      </option>
     `).join('');
+  }
+
+  // Даты
+  const today = new Date();
+  const dateInStr = today.toISOString().split('T')[0];
+  const outDate = new Date();
+  outDate.setDate(today.getDate() + 3);
+  const dateOutStr = outDate.toISOString().split('T')[0];
+
+  document.getElementById('checkin-date-in').value = dateInStr;
+  document.getElementById('checkin-date-out').value = dateOutStr;
+
+  recalculateCheckInSummary();
+  clearModalAlert('modal-quick-checkin');
+  openModal('modal-quick-checkin');
+}
+
+// Перерасчет стоимости в окне быстрого заселения
+function recalculateCheckInSummary() {
+  const roomSelect = document.getElementById('checkin-room-select');
+  const selectedOption = roomSelect?.selectedOptions[0];
+  const summaryBox = document.getElementById('checkin-calc-summary');
+  if (!summaryBox || !selectedOption || !selectedOption.value) {
+    if (summaryBox) summaryBox.innerText = 'Выберите номер для расчета стоимости';
+    return;
+  }
+
+  const pricePerNight = parseFloat(selectedOption.dataset.price) || 0;
+  const dateIn = new Date(document.getElementById('checkin-date-in').value);
+  const dateOut = new Date(document.getElementById('checkin-date-out').value);
+
+  if (isNaN(dateIn) || isNaN(dateOut) || dateIn >= dateOut) {
+    summaryBox.innerHTML = '<span style="color:#9b2c2c">Дата выезда должна быть строго позже даты заезда</span>';
+    return;
+  }
+
+  const nights = Math.max(1, Math.ceil((dateOut - dateIn) / (1000 * 60 * 60 * 24)));
+  const total = nights * pricePerNight;
+  summaryBox.innerHTML = `Расчет: <strong>${nights} суток</strong> &times; ${formatRub(pricePerNight)} = <strong>${formatRub(total)}</strong>`;
+}
+
+// Отправка быстрого заселения
+async function submitQuickCheckIn(e) {
+  e.preventDefault();
+  const guestId = parseInt(document.getElementById('checkin-guest-id').value);
+  const roomId = parseInt(document.getElementById('checkin-room-select').value);
+
+  if (!roomId) {
+    showModalAlert('modal-quick-checkin', 'Пожалуйста, выберите свободный номер');
+    return;
+  }
+
+  const btn = document.getElementById('checkin-submit-btn');
+  const origText = btn ? btn.innerHTML : 'Заселить в номер';
+  if (btn) { btn.disabled = true; btn.innerHTML = 'Заселение...'; }
+
+  clearModalAlert('modal-quick-checkin');
+
+  try {
+    await api(`/guests/${guestId}/checkin?roomId=${roomId}`, { method: 'POST' });
+    notify('Гость успешно заселен в номер');
+    closeModal('modal-quick-checkin');
+    await Promise.all([renderGuests(), renderDashboard(), renderRooms()]);
+  } catch (err) {
+    showModalAlert('modal-quick-checkin', err.message);
+    notify(err.message, 'err');
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = origText; }
+  }
+}
+
+// Прямое заселение гостя с уже существующей бронью
+async function checkInGuest(id) {
+  try {
+    await api(`/guests/${id}/checkin`, { method: 'POST' });
+    notify('Гость успешно заселен в номер');
+    await Promise.all([renderGuests(), renderDashboard(), renderRooms()]);
+  } catch (err) {
+    notify(err.message, 'err');
+  }
+}
+
+// Выселение гостя
+async function checkOutGuest(id) {
+  try {
+    await api(`/guests/${id}/checkout`, { method: 'POST' });
+    notify('Гость выселен, номер передан на уборку');
+    await Promise.all([renderGuests(), renderDashboard(), renderRooms()]);
+  } catch (err) {
+    notify(err.message, 'err');
   }
 }
 
@@ -874,19 +1307,19 @@ async function renderStaff() {
     <div class="staff-card">
       <div class="staff-top">
         <div>
-          <div class="staff-name">${s.firstName} ${s.lastName}</div>
+          <div class="staff-name">${escapeHtml(s.firstName)} ${escapeHtml(s.lastName)}</div>
           <div class="staff-pos">${LABELS.positions[s.position] || s.position}</div>
         </div>
-        <span class="badge ${s.active ? 'badge-AVAILABLE' : 'badge-OUT_OF_ORDER'}">
+        <span class="door-hanger-card ${s.active ? 'AVAILABLE' : 'OUT_OF_ORDER'}" style="margin:0; padding:2px 8px">
           ${s.active ? 'В штате' : 'Отпуск'}
         </span>
       </div>
       <div class="staff-details">
-        <div>Телефон: <strong style="color:var(--text-main)">${s.phone}</strong></div>
-        <div>Email: <strong style="color:var(--text-main)">${s.email}</strong></div>
+        <div>Телефон: <strong>${escapeHtml(s.phone)}</strong></div>
+        <div>Email: <strong>${escapeHtml(s.email)}</strong></div>
         <div>Принят: <span>${s.hireDate || '2023-01-15'}</span></div>
       </div>
-      <div class="staff-footer">
+      <div style="display:flex; gap:8px">
         <button class="btn btn-sm btn-secondary" style="flex:1" onclick="openStaffSchedule(${s.id})">
           График смен
         </button>
@@ -911,12 +1344,12 @@ async function renderTariffs() {
   if (tBody && tariffs) {
     tBody.innerHTML = tariffs.map(t => `
       <tr>
-        <td><strong>${t.name}</strong></td>
+        <td><strong>${escapeHtml(t.name)}</strong></td>
         <td>${LABELS.types[t.roomType] || t.roomType}</td>
-        <td><strong style="color:var(--primary-accent)">${formatRub(t.pricePerNight)}</strong></td>
+        <td><strong>${formatRub(t.pricePerNight)}</strong></td>
         <td>${t.seasonStart ? `${t.seasonStart} &rarr; ${t.seasonEnd}` : 'Круглый год'}</td>
         <td>
-          <span class="badge ${t.active ? 'badge-AVAILABLE' : 'badge-OUT_OF_ORDER'}">
+          <span class="door-hanger-card ${t.active ? 'AVAILABLE' : 'OUT_OF_ORDER'}" style="display:inline-block; padding:2px 7px; margin:0">
             ${t.active ? 'Активен' : 'Архив'}
           </span>
         </td>
@@ -928,22 +1361,21 @@ async function renderTariffs() {
   if (pBody && payments) {
     if (payments.length === 0) {
       pBody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:20px">Платежи не зарегистрированы</td></tr>';
-    } else {
-      pBody.innerHTML = payments.map(p => `
-        <tr>
-          <td><strong>#${p.id}</strong></td>
-          <td>Бронь #${p.bookingId || (p.booking ? p.booking.id : '—')}</td>
-          <td><strong style="color:#059669">${formatRub(p.amount)}</strong></td>
-          <td><span class="badge badge-AVAILABLE">${LABELS.methods[p.method] || p.method}</span></td>
-          <td>${p.paidAt ? p.paidAt.substring(0, 16) : '—'}</td>
-          <td>${p.description || 'Оплата проживания'}</td>
-        </tr>
-      `).join('');
+      return;
     }
+    pBody.innerHTML = payments.map(p => `
+      <tr>
+        <td><strong>#${p.id}</strong></td>
+        <td>Бронь #${p.bookingId || (p.booking ? p.booking.id : '—')}</td>
+        <td><strong style="color:#2b5932">${formatRub(p.amount)}</strong></td>
+        <td><span class="room-assigned-pill">${LABELS.methods[p.method] || p.method}</span></td>
+        <td>${p.paidAt ? p.paidAt.substring(0, 16) : '—'}</td>
+        <td>${escapeHtml(p.description || 'Оплата проживания')}</td>
+      </tr>
+    `).join('');
   }
 }
 
-// Открытие модалки оплаты
 async function openPaymentModal() {
   const books = await api('/bookings');
   const sel = document.getElementById('pay-booking-sel');
@@ -976,7 +1408,7 @@ async function submitPayment(e) {
 
   try {
     await api('/payments', { method: 'POST', body: JSON.stringify(payload) });
-    notify('Платеж успешно зарегистрирован');
+    notify('Платеж успешно проведен');
     closeModal('modal-add-payment');
     renderTariffs();
     renderDashboard();
@@ -990,7 +1422,7 @@ async function submitPayment(e) {
 }
 
 // ==========================================================================
-// 7. ОТЧЕТЫ И АНАЛИТИКА (Устранены все undefined и расхождения DTO)
+// 7. ОТЧЕТЫ И АНАЛИТИКА
 // ==========================================================================
 async function renderReports() {
   const [occ, rev, staffRep] = await Promise.all([
@@ -1028,11 +1460,11 @@ async function renderReports() {
     const txCount = rev.totalPaymentsCount !== undefined 
       ? rev.totalPaymentsCount 
       : (rev.totalTransactions !== undefined ? rev.totalTransactions : 0);
-    const byMethod = rev.revenueByPaymentMethod || rev.revenueByMethod || {};
+    const byMethod = rev.revenueByPaymentMethod || rev.revenueByMethod || rev.byMethod || {};
 
-    const cardSum = Number(byMethod.CARD || byMethod.card || 0);
-    const cashSum = Number(byMethod.CASH || byMethod.cash || 0);
-    const transferSum = Number(byMethod.TRANSFER || byMethod.transfer || 0);
+    const cardSum = Number(byMethod.CARD ?? byMethod.card ?? 0);
+    const cashSum = Number(byMethod.CASH ?? byMethod.cash ?? 0);
+    const transferSum = Number(byMethod.TRANSFER ?? byMethod.transfer ?? 0);
 
     const revTotalEl = document.getElementById('rep-rev-total');
     if (revTotalEl) revTotalEl.innerText = formatRub(totalRev);
@@ -1049,7 +1481,6 @@ async function renderReports() {
     const transferEl = document.getElementById('rep-transfer-sum');
     if (transferEl) transferEl.innerText = formatRub(transferSum);
 
-    // Расчет долей для индикаторных шкал
     const baseRev = totalRev > 0 ? totalRev : 1;
     const cardPct = totalRev > 0 ? Math.round((cardSum / baseRev) * 100) : 0;
     const transferPct = totalRev > 0 ? Math.round((transferSum / baseRev) * 100) : 0;
@@ -1065,18 +1496,19 @@ async function renderReports() {
     if (cashBar) cashBar.style.width = `${cashPct}%`;
   }
 
-  if (staffRep && staffRep.staffStats) {
+  const staffList = (staffRep && (staffRep.staffStats || staffRep.stats || staffRep.staffMemberStats)) || [];
+  if (staffList.length > 0) {
     const list = document.getElementById('rep-staff-kpi');
     if (list) {
-      list.innerHTML = staffRep.staffStats.map(s => `
-        <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--border-inner)">
+      list.innerHTML = staffList.map(s => `
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--border-light)">
           <div>
-            <div style="font-weight:700; color:var(--text-main); font-size:13.5px">${s.name}</div>
-            <div style="font-size:11.5px; color:var(--text-muted)">${LABELS.positions[s.position] || s.position} • ${s.shift}</div>
+            <div style="font-weight:700; color:var(--text-main); font-size:13px">${escapeHtml(s.name)}</div>
+            <div style="font-size:11.5px; color:var(--text-muted)">${LABELS.positions[s.position] || s.position} • ${s.shift || 'Смена'}</div>
           </div>
           <div style="text-align:right">
-            <div style="color:#d97706; font-weight:700; font-size:13px">Рейтинг: ${s.rating}</div>
-            <div style="font-size:11px; color:var(--text-dim)">Смен: ${s.tasksCompleted}</div>
+            <div style="color:var(--brass-hover); font-weight:700; font-size:12.5px">Оценка: ${s.rating}</div>
+            <div style="font-size:11px; color:var(--text-dim)">Смен: ${s.tasksCompleted || 0}</div>
           </div>
         </div>
       `).join('');
@@ -1123,7 +1555,7 @@ async function applyRoomStatus() {
       method: 'PATCH',
       body: JSON.stringify({ status: st })
     });
-    notify('Статус номера успешно обновлен');
+    notify('Статус номера обновлен');
     closeModal('modal-status');
     renderRooms();
     renderDashboard();
@@ -1136,7 +1568,7 @@ async function applyRoomStatus() {
   }
 }
 
-// Создание нового номера
+// Создание номера
 async function submitRoom(e) {
   e.preventDefault();
   const btn = document.getElementById('add-room-submit-btn');
@@ -1172,7 +1604,7 @@ async function submitRoom(e) {
 }
 
 async function removeRoom(id) {
-  if (!confirm('Вы действительно хотите удалить этот номер?')) return;
+  if (!confirm('Вы действительно хотите удалить этот номер из фонда?')) return;
   try {
     await api(`/rooms/${id}`, { method: 'DELETE' });
     notify('Номер успешно удален');
@@ -1203,7 +1635,7 @@ async function submitBooking(e) {
 
   try {
     await api('/bookings', { method: 'POST', body: JSON.stringify(payload) });
-    notify('Бронирование успешно оформлено');
+    notify('Бронирование оформлено');
     closeModal('modal-add-booking');
     renderBookings();
     renderDashboard();
@@ -1216,10 +1648,10 @@ async function submitBooking(e) {
 }
 
 async function cancelBooking(id) {
-  if (!confirm('Вы действительно хотите аннулировать это бронирование?')) return;
+  if (!confirm('Аннулировать бронирование?')) return;
   try {
     await api(`/bookings/${id}`, { method: 'DELETE' });
-    notify('Бронирование успешно аннулировано');
+    notify('Бронирование аннулировано');
     renderBookings();
     renderDashboard();
   } catch (err) {
@@ -1227,7 +1659,7 @@ async function cancelBooking(id) {
   }
 }
 
-// Регистрация нового гостя
+// Регистрация гостя
 async function submitGuest(e) {
   e.preventDefault();
   const btn = document.getElementById('add-guest-submit-btn');
@@ -1247,7 +1679,7 @@ async function submitGuest(e) {
 
   try {
     await api('/guests', { method: 'POST', body: JSON.stringify(guest) });
-    notify('Гость успешно зарегистрирован');
+    notify('Гость зарегистрирован в базе');
     closeModal('modal-add-guest');
     e.target.reset();
     renderGuests();
@@ -1257,30 +1689,6 @@ async function submitGuest(e) {
     notify(err.message, 'err');
   } finally {
     if (btn) { btn.disabled = false; btn.innerHTML = origText; }
-  }
-}
-
-async function checkInGuest(id) {
-  try {
-    await api(`/guests/${id}/checkin`, { method: 'POST' });
-    notify('Гость заселен в номер');
-    renderGuests();
-    renderDashboard();
-    renderRooms();
-  } catch (err) {
-    notify(err.message, 'err');
-  }
-}
-
-async function checkOutGuest(id) {
-  try {
-    await api(`/guests/${id}/checkout`, { method: 'POST' });
-    notify('Гость выселен, номер передан на уборку');
-    renderGuests();
-    renderDashboard();
-    renderRooms();
-  } catch (err) {
-    notify(err.message, 'err');
   }
 }
 
@@ -1327,7 +1735,6 @@ async function removeStaff(id) {
   }
 }
 
-// Расписание сотрудника
 async function openStaffSchedule(id) {
   const sch = await api(`/staff/${id}/schedule`);
   if (!sch) return;
@@ -1342,7 +1749,6 @@ async function openStaffSchedule(id) {
   openModal('modal-staff-shift');
 }
 
-// Просмотр и печать счета (Invoice)
 async function openInvoiceSheet(bookingId) {
   const inv = await api(`/invoices/${bookingId}`);
   if (!inv) return;
@@ -1364,7 +1770,6 @@ async function openInvoiceSheet(bookingId) {
   openModal('modal-folio');
 }
 
-// Всплывающие уведомления (Precision Toasts)
 function notify(msg, type = 'ok') {
   const rack = document.getElementById('toast-rack');
   if (!rack) return;
@@ -1376,12 +1781,11 @@ function notify(msg, type = 'ok') {
 
   setTimeout(() => {
     t.style.opacity = '0';
-    t.style.transform = 'translateX(24px)';
+    t.style.transform = 'translateY(10px)';
     setTimeout(() => t.remove(), 250);
   }, 3200);
 }
 
-// Обновление числовых счетчиков на вкладках
 function updateNavCounts(counts = {}) {
   if (counts.rooms !== undefined) {
     const el = document.getElementById('nav-rooms-badge');
@@ -1401,7 +1805,6 @@ function updateNavCounts(counts = {}) {
   }
 }
 
-// Инициализация при загрузке документа
 window.addEventListener('DOMContentLoaded', async () => {
   setupNavigation();
   await checkBackendConnection();
