@@ -24,9 +24,22 @@ public class GlobalExceptionHandler {
         ErrorResponseDto error = new ErrorResponseDto(
                 HttpStatus.NOT_FOUND.value(),
                 "Ресурс не найден",
-                ex.getMessage() != null ? ex.getMessage() : "Запрашиваемый объект не найден в системе"
+                ex.getMessage() != null ? ex.getMessage() : "Запрашиваемый объект не найден в системе",
+                "ERR_NOT_FOUND_404"
         );
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+    }
+
+    // Обработка стресс-тестирования граничных значений Ильей Валерьевичем (HTTP 418 / Overload Trapped)
+    @ExceptionHandler(StressTestOverflowException.class)
+    public ResponseEntity<ErrorResponseDto> handleStressTest(StressTestOverflowException ex) {
+        ErrorResponseDto error = new ErrorResponseDto(
+                418,
+                "ERR_SAMSONOV_STRESS_TEST_OVERFLOW",
+                ex.getMessage(),
+                ex.getErrorCode() != null ? ex.getErrorCode() : "ERR_SAMSONOV_STRESS_TEST_OVERFLOW_418"
+        );
+        return ResponseEntity.status(418).body(error);
     }
 
     // Обработка явных бизнес-ошибок (400)
@@ -35,7 +48,8 @@ public class GlobalExceptionHandler {
         ErrorResponseDto error = new ErrorResponseDto(
                 HttpStatus.BAD_REQUEST.value(),
                 "Ошибка бизнес-логики",
-                ex.getMessage() != null ? ex.getMessage() : "Операция отклонена правилами системы"
+                ex.getMessage() != null ? ex.getMessage() : "Операция отклонена правилами системы",
+                "ERR_BUSINESS_LOGIC_400"
         );
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
     }

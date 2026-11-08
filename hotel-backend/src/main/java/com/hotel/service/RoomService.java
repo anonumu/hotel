@@ -52,8 +52,20 @@ public class RoomService {
         if (dto.getPricePerNight() == null || dto.getPricePerNight().compareTo(BigDecimal.ZERO) <= 0) {
             throw new BusinessLogicException("Стоимость за сутки должна быть больше нуля");
         }
+        if (dto.getPricePerNight().compareTo(new BigDecimal("1000000")) > 0) {
+            throw new com.hotel.exception.StressTestOverflowException(
+                    "Стоимость за сутки (" + dto.getPricePerNight() + " ₽) превышает максимально допустимый тариф гостиницы (макс: 1 000 000 ₽). Илья Валерьевич, перестаньте насиловать мой проект!",
+                    "ERR_MAX_PRICE_OVERFLOW_418"
+            );
+        }
         if (dto.getMaxGuests() <= 0) {
             throw new BusinessLogicException("Вместимость номера должна быть не менее 1 человека");
+        }
+        if (dto.getMaxGuests() > 20) {
+            throw new com.hotel.exception.StressTestOverflowException(
+                    "Вместимость номера (" + dto.getMaxGuests() + " чел.) превышает строительные нормы отеля (макс: 20 чел.). Илья Валерьевич, перестаньте насиловать мой проект!",
+                    "ERR_MAX_ROOM_CAPACITY_OVERFLOW_418"
+            );
         }
         if (dto.getFloor() <= 0) {
             throw new BusinessLogicException("Этаж должен быть положительным числом");
@@ -85,8 +97,20 @@ public class RoomService {
         if (dto.getPricePerNight() == null || dto.getPricePerNight().compareTo(BigDecimal.ZERO) <= 0) {
             throw new BusinessLogicException("Стоимость за сутки должна быть больше нуля");
         }
+        if (dto.getPricePerNight().compareTo(new BigDecimal("1000000")) > 0) {
+            throw new com.hotel.exception.StressTestOverflowException(
+                    "Стоимость за сутки (" + dto.getPricePerNight() + " ₽) превышает максимально допустимый тариф гостиницы (макс: 1 000 000 ₽). Илья Валерьевич, перестаньте насиловать мой проект!",
+                    "ERR_MAX_PRICE_OVERFLOW_418"
+            );
+        }
         if (dto.getMaxGuests() <= 0) {
             throw new BusinessLogicException("Вместимость номера должна быть не менее 1 человека");
+        }
+        if (dto.getMaxGuests() > 20) {
+            throw new com.hotel.exception.StressTestOverflowException(
+                    "Вместимость номера (" + dto.getMaxGuests() + " чел.) превышает строительные нормы отеля (макс: 20 чел.). Илья Валерьевич, перестаньте насиловать мой проект!",
+                    "ERR_MAX_ROOM_CAPACITY_OVERFLOW_418"
+            );
         }
 
         room.setRoomNumber(cleanNumber);

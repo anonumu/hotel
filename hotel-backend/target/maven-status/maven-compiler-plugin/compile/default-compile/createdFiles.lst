@@ -11,6 +11,7 @@ com\hotel\model\Payment.class
 com\hotel\dto\RoomDto.class
 com\hotel\service\ReportService.class
 com\hotel\dto\GuestDto.class
+com\hotel\exception\StressTestOverflowException.class
 com\hotel\controller\StaffController.class
 com\hotel\dto\StaffDto.class
 com\hotel\dto\StaffPerformanceDto$StaffMemberStat.class

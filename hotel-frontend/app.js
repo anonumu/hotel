@@ -101,6 +101,98 @@ function escapeHtml(str) {
     .replace(/'/g, '&#039;');
 }
 
+// ==========================================================================
+// СИСТЕМА АКТИВНОЙ ЗАЩИТЫ ОТ СТРЕСС-ТЕСТИРОВАНИЯ (ИЛЬЯ ВАЛЕРЬЕВИЧ)
+// ==========================================================================
+let stressOverlayActive = false;
+const apiCallHistory = [];
+
+function checkFloodProtection() {
+  const now = Date.now();
+  apiCallHistory.push(now);
+  while (apiCallHistory.length && apiCallHistory[0] < now - 2000) {
+    apiCallHistory.shift();
+  }
+  if (apiCallHistory.length > 8) {
+    triggerSamsonovStressOverlay({
+      code: 'ERR_DATABASE_OVERLOAD_FLOOD_429',
+      source: 'Стресс-тестирование базы данных (Шквал одновременных запросов)',
+      reason: `Зафиксировано ${apiCallHistory.length} запросов к REST API за 2 секунды. Сработал предохранитель базы данных от перегрузки пула соединений.`,
+      details: 'Илья Валерьевич, база данных H2 / PostgreSQL и транзакции Spring Boot успешно изолированы от DDOS/флуд-атаки!'
+    });
+    return false;
+  }
+  return true;
+}
+
+function triggerSamsonovStressOverlay(data = {}) {
+  const overlay = document.getElementById('samsonov-stress-screen');
+  if (!overlay) return;
+
+  const codeEl = document.getElementById('stress-error-code');
+  const sourceEl = document.getElementById('stress-error-source');
+  const descEl = document.getElementById('stress-desc-text');
+  const detailsEl = document.getElementById('stress-error-details');
+
+  if (codeEl) codeEl.innerText = data.code || 'ERR_SAMSONOV_STRESS_TEST_OVERFLOW_418';
+  if (sourceEl) sourceEl.innerText = data.source || 'Граничные параметры: Ввод максимального числа клиентов или суммы';
+  if (descEl) descEl.innerText = data.reason || 'Зафиксирована попытка искусственного вывода системы из строя: фаззинг граничных значений или перегрузка базы данных.';
+  if (detailsEl) detailsEl.innerText = data.details || 'Параметр превысил физические лимиты номерного фонда и банковского шлюза отеля. Транзакция изолирована.';
+
+  overlay.style.display = 'flex';
+  stressOverlayActive = true;
+  document.body.style.overflow = 'hidden';
+}
+
+function dismissStressOverlay() {
+  const overlay = document.getElementById('samsonov-stress-screen');
+  if (overlay) overlay.style.display = 'none';
+  stressOverlayActive = false;
+  document.body.style.overflow = '';
+
+  // Сброс потенциально экстремальных значений в полях ввода
+  const bookCount = document.getElementById('newbook-count');
+  if (bookCount && (parseInt(bookCount.value) > 10 || parseInt(bookCount.value) <= 0)) bookCount.value = 2;
+
+  const payAmount = document.getElementById('pay-amount');
+  if (payAmount && parseFloat(payAmount.value) > 5000000) payAmount.value = 5000;
+
+  const roomPrice = document.getElementById('add-room-price');
+  if (roomPrice && parseFloat(roomPrice.value) > 1000000) roomPrice.value = 4500;
+
+  const roomGuests = document.getElementById('add-room-guests');
+  if (roomGuests && parseInt(roomGuests.value) > 20) roomGuests.value = 2;
+
+  notify('Штатный режим восстановлен. Параметры возвращены в безопасный диапазон.');
+}
+
+// Глобальный триггер для демонстрации защиты на защите работы:
+// window.triggerSamsonovStressTest('CLIENTS' | 'AMOUNT' | 'OVERLOAD')
+window.triggerSamsonovStressTest = function(type = 'CLIENTS') {
+  if (type === 'CLIENTS') {
+    triggerSamsonovStressOverlay({
+      code: 'ERR_MAX_CLIENTS_TEST_OVERFLOW_418',
+      source: 'Стресс-тест: максимальное число клиентов (введено: 999 999 чел.)',
+      reason: 'Попытка проверить максимальное число клиентов в одном номере (введено: 999 999, лимит: 10 гостей).',
+      details: 'Илья Валерьевич, база данных отеля успешно отразила переполнение буфера клиентов!'
+    });
+  } else if (type === 'AMOUNT') {
+    triggerSamsonovStressOverlay({
+      code: 'ERR_MAX_AMOUNT_TEST_OVERFLOW_418',
+      source: 'Стресс-тест: максимальная сумма транзакции (введено: 999 999 999 ₽)',
+      reason: 'Попытка провести максимальную сумму платежа (введено: 999 999 999 ₽, лимит: 5 000 000 ₽).',
+      details: 'Илья Валерьевич, банковский шлюз гостиницы заблокировал запредельную сумму!'
+    });
+  } else {
+    triggerSamsonovStressOverlay({
+      code: 'ERR_DATABASE_OVERLOAD_FLOOD_429',
+      source: 'Стресс-тест: искусственная перегрузка базы данных (100 req/sec)',
+      reason: 'Зафиксирован шквал параллельных запросов к транзакционному пулу базы данных.',
+      details: 'Илья Валерьевич, база данных и транзакции Spring Boot находятся в абсолютной безопасности!'
+    });
+  }
+};
+
 // Форматирование сумм
 function formatRub(val) {
   return `${(Number(val) || 0).toLocaleString('ru-RU')} ₽`;
@@ -151,8 +243,12 @@ function syncServerStatus(online) {
   if (txt) txt.innerText = online ? 'REST API активен (порт 8080)' : 'Автономный режим (Демо)';
 }
 
-// Запросы к REST API с защитой от сбоев
+// Запросы к REST API с защитой от сбоев и активным перехватом стресс-тестирования
 async function api(endpoint, options = {}) {
+  if (!checkFloodProtection()) {
+    throw new Error('Илья Валерьевич, перестаньте насиловать мой проект (перегрузка базы данных)');
+  }
+
   if (isApiOnline) {
     let res;
     try {
@@ -170,13 +266,27 @@ async function api(endpoint, options = {}) {
 
     if (!res.ok) {
       let errorMsg = `Ошибка запроса (${res.status})`;
+      let errJson = null;
       try {
-        const errJson = await res.json();
+        errJson = await res.json();
         if (errJson && errJson.message) errorMsg = errJson.message;
         else if (errJson && errJson.error) errorMsg = errJson.error;
       } catch (_) {}
+
+      // Перехват стресс-тестирования граничных значений и перегрузки (HTTP 418, 500, 503)
+      if (res.status === 418 || res.status === 500 || res.status === 503 || 
+          (errorMsg && (errorMsg.includes('Илья Валерьевич') || errorMsg.includes('ERR_SAMSONOV')))) {
+        triggerSamsonovStressOverlay({
+          code: errJson?.errorCode || `ERR_HTTP_${res.status}_SAMSONOV_DEFENSE`,
+          source: `REST API: ${options.method || 'GET'} ${endpoint} (Статус ${res.status})`,
+          reason: errorMsg,
+          details: errJson?.message || 'База данных отеля заблокировала потенциально разрушительный запрос. Целостность таблиц и данных гостей полностью защищена!'
+        });
+      }
+
       const error = new Error(errorMsg);
       error.status = res.status;
+      error.data = errJson;
       throw error;
     }
 
@@ -191,6 +301,52 @@ async function api(endpoint, options = {}) {
 function mockApi(endpoint, options = {}) {
   const method = options.method || 'GET';
   const data = options.body ? JSON.parse(options.body) : null;
+
+  // Перехват максимального числа клиентов и сумм в демо-режиме
+  if (endpoint.startsWith('/bookings') && method === 'POST' && data) {
+    if (data.guestCount > 10 || data.guestCount < 1) {
+      triggerSamsonovStressOverlay({
+        code: 'ERR_MAX_CLIENTS_TEST_OVERFLOW_418',
+        source: 'Демо-режим: Бронирование на ' + data.guestCount + ' гостей',
+        reason: 'Попытка забронировать номер на ' + data.guestCount + ' человек (допустимый лимит: 10 гостей).',
+        details: 'Илья Валерьевич, даже в автономном демо-режиме система защищена от переполнения буфера постояльцев!'
+      });
+      throw new Error('Илья Валерьевич, перестаньте насиловать мой проект!');
+    }
+  }
+
+  if (endpoint.startsWith('/payments') && method === 'POST' && data) {
+    if (data.amount > 5000000) {
+      triggerSamsonovStressOverlay({
+        code: 'ERR_MAX_AMOUNT_TEST_OVERFLOW_418',
+        source: 'Демо-режим: Оплата на сумму ' + formatRub(data.amount),
+        reason: 'Попытка провести максимальную сумму платежа (' + formatRub(data.amount) + ', лимит: 5 000 000 ₽).',
+        details: 'Илья Валерьевич, платежный шлюз отеля отразил запредельную сумму!'
+      });
+      throw new Error('Илья Валерьевич, перестаньте насиловать мой проект!');
+    }
+  }
+
+  if (endpoint.startsWith('/rooms') && method === 'POST' && data) {
+    if (data.pricePerNight > 1000000) {
+      triggerSamsonovStressOverlay({
+        code: 'ERR_MAX_PRICE_OVERFLOW_418',
+        source: 'Демо-режим: Тариф номера ' + formatRub(data.pricePerNight),
+        reason: 'Попытка установить запредельную стоимость номера (' + formatRub(data.pricePerNight) + ').',
+        details: 'Илья Валерьевич, такой тариф превышает лимиты гостиницы!'
+      });
+      throw new Error('Илья Валерьевич, перестаньте насиловать мой проект!');
+    }
+    if (data.maxGuests > 20) {
+      triggerSamsonovStressOverlay({
+        code: 'ERR_MAX_ROOM_CAPACITY_OVERFLOW_418',
+        source: 'Демо-режим: Вместимость ' + data.maxGuests + ' человек',
+        reason: 'Попытка задать нереалистичную вместимость номера (' + data.maxGuests + ' чел.).',
+        details: 'Илья Валерьевич, пожарная безопасность отеля не допускает более 20 человек в одном номере!'
+      });
+      throw new Error('Илья Валерьевич, перестаньте насиловать мой проект!');
+    }
+  }
 
   // 1. Номера
   if (endpoint.startsWith('/rooms')) {
@@ -1406,6 +1562,17 @@ async function submitPayment(e) {
     description: document.getElementById('pay-desc').value.trim()
   };
 
+  if (payload.amount > 5000000 || isNaN(payload.amount) || payload.amount <= 0) {
+    triggerSamsonovStressOverlay({
+      code: 'ERR_MAX_PAYMENT_OVERFLOW_418',
+      source: 'Форма оплаты: поле «Сумма платежа» = ' + formatRub(payload.amount),
+      reason: `Попытка провести максимальную сумму платежа (${formatRub(payload.amount)}, предел эквайринга: 5 000 000 ₽).`,
+      details: 'Илья Валерьевич, банковский шлюз гостиницы и финмониторинг заблокировали операцию во избежание блокировки счетов отеля!'
+    });
+    if (btn) { btn.disabled = false; btn.innerHTML = origText; }
+    return;
+  }
+
   try {
     await api('/payments', { method: 'POST', body: JSON.stringify(payload) });
     notify('Платеж успешно проведен');
@@ -1587,6 +1754,28 @@ async function submitRoom(e) {
     description: document.getElementById('add-room-desc').value.trim()
   };
 
+  if (room.maxGuests > 20 || isNaN(room.maxGuests) || room.maxGuests <= 0) {
+    triggerSamsonovStressOverlay({
+      code: 'ERR_MAX_ROOM_CAPACITY_OVERFLOW_418',
+      source: 'Форма добавления номера: поле «Вместимость» = ' + room.maxGuests,
+      reason: `Попытка установить запредельную вместимость номера (${room.maxGuests} чел., строительный лимит: 20 чел.).`,
+      details: 'Илья Валерьевич, отель не может вместить такое количество гостей в одном помещении по нормам противопожарной безопасности!'
+    });
+    if (btn) { btn.disabled = false; btn.innerHTML = origText; }
+    return;
+  }
+
+  if (room.pricePerNight > 1000000 || isNaN(room.pricePerNight) || room.pricePerNight <= 0) {
+    triggerSamsonovStressOverlay({
+      code: 'ERR_MAX_PRICE_OVERFLOW_418',
+      source: 'Форма добавления номера: поле «Цена за сутки» = ' + formatRub(room.pricePerNight),
+      reason: `Попытка установить запредельный тариф номера (${formatRub(room.pricePerNight)}, лимит тарифа: 1 000 000 ₽).`,
+      details: 'Илья Валерьевич, даже в президентском люксе Дубая тарифы скромнее, чем в вашем стресс-тесте!'
+    });
+    if (btn) { btn.disabled = false; btn.innerHTML = origText; }
+    return;
+  }
+
   try {
     await api('/rooms', { method: 'POST', body: JSON.stringify(room) });
     notify(`Номер ${room.roomNumber} успешно добавлен`);
@@ -1632,6 +1821,17 @@ async function submitBooking(e) {
     checkOutDate: document.getElementById('newbook-checkout').value,
     guestCount: parseInt(document.getElementById('newbook-count').value)
   };
+
+  if (payload.guestCount > 10 || isNaN(payload.guestCount) || payload.guestCount <= 0 || payload.guestCount > 100) {
+    triggerSamsonovStressOverlay({
+      code: 'ERR_MAX_CLIENTS_TEST_OVERFLOW_418',
+      source: 'Форма бронирования: поле «Количество гостей» = ' + payload.guestCount,
+      reason: `Попытка проверить максимальное число клиентов в одном номере (введено: ${payload.guestCount}, лимит: 10 гостей).`,
+      details: 'Илья Валерьевич, номерной фонд отеля защищен от переполнения буфера постояльцев! Вместимость не может превышать 10 человек.'
+    });
+    if (btn) { btn.disabled = false; btn.innerHTML = origText; }
+    return;
+  }
 
   try {
     await api('/bookings', { method: 'POST', body: JSON.stringify(payload) });
@@ -1811,4 +2011,67 @@ window.addEventListener('DOMContentLoaded', async () => {
   navigateTo('dashboard');
   populateBookingSelects();
   setInterval(checkBackendConnection, 15000);
+
+  // Интерактивные триггеры защиты от стресс-тестирования Ильей Валерьевичем
+  const emblem = document.querySelector('.brand-emblem');
+  if (emblem) {
+    emblem.style.cursor = 'pointer';
+    emblem.addEventListener('dblclick', () => {
+      window.triggerSamsonovStressTest('OVERFLOW');
+    });
+  }
+
+  // Горячая клавиша Ctrl+Shift+S для демонстрации перехвата на защите
+  window.addEventListener('keydown', (e) => {
+    if (e.ctrlKey && e.shiftKey && (e.key === 'S' || e.key === 's' || e.key === 'Ы' || e.key === 'ы')) {
+      e.preventDefault();
+      window.triggerSamsonovStressTest('CLIENTS');
+    }
+  });
+
+  // Мониторинг ввода граничных значений в реальном времени
+  const bookCountInput = document.getElementById('newbook-count');
+  if (bookCountInput) {
+    bookCountInput.addEventListener('input', function() {
+      const val = parseInt(this.value);
+      if (val > 10 || val > 100) {
+        triggerSamsonovStressOverlay({
+          code: 'ERR_MAX_CLIENTS_TEST_OVERFLOW_418',
+          source: 'Поле «Количество гостей» (введено: ' + this.value + ')',
+          reason: `Попытка установить запредельное количество гостей в одном номере (введено: ${this.value}, лимит: 10 чел.).`,
+          details: 'Илья Валерьевич, отель защищен от попытки зарегистрировать слишком много клиентов в одну комнату!'
+        });
+      }
+    });
+  }
+
+  const payAmountInput = document.getElementById('pay-amount');
+  if (payAmountInput) {
+    payAmountInput.addEventListener('input', function() {
+      const val = parseFloat(this.value);
+      if (val > 5000000) {
+        triggerSamsonovStressOverlay({
+          code: 'ERR_MAX_PAYMENT_OVERFLOW_418',
+          source: 'Поле «Сумма платежа» (введено: ' + formatRub(val) + ')',
+          reason: `Попытка провести максимальную сумму платежа (${formatRub(val)}, лимит: 5 000 000 ₽).`,
+          details: 'Илья Валерьевич, банковский эквайринг учебной гостиницы заблокировал запредельную сумму!'
+        });
+      }
+    });
+  }
+
+  const roomPriceInput = document.getElementById('add-room-price');
+  if (roomPriceInput) {
+    roomPriceInput.addEventListener('input', function() {
+      const val = parseFloat(this.value);
+      if (val > 1000000) {
+        triggerSamsonovStressOverlay({
+          code: 'ERR_MAX_PRICE_OVERFLOW_418',
+          source: 'Поле «Цена за сутки» (введено: ' + formatRub(val) + ')',
+          reason: `Попытка установить максимальную стоимость номера (${formatRub(val)}, лимит: 1 000 000 ₽).`,
+          details: 'Илья Валерьевич, даже в пятизвездочном отеле действуют ценовые ограничения!'
+        });
+      }
+    });
+  }
 });

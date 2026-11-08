@@ -17,6 +17,7 @@ D:\Favorites\Самсонов проект\hotel-backend\src\main\java\com\hotel\controller\St
 D:\Favorites\Самсонов проект\hotel-backend\src\main\java\com\hotel\controller\TariffController.java
 D:\Favorites\Самсонов проект\hotel-backend\src\main\java\com\hotel\service\BookingService.java
 D:\Favorites\Самсонов проект\hotel-backend\src\main\java\com\hotel\controller\GuestController.java
+D:\Favorites\Самсонов проект\hotel-backend\src\main\java\com\hotel\exception\StressTestOverflowException.java
 D:\Favorites\Самсонов проект\hotel-backend\src\main\java\com\hotel\controller\InvoiceController.java
 D:\Favorites\Самсонов проект\hotel-backend\src\main\java\com\hotel\controller\PaymentController.java
 D:\Favorites\Самсонов проект\hotel-backend\src\main\java\com\hotel\exception\BusinessLogicException.java

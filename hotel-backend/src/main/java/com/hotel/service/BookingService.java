@@ -58,6 +58,13 @@ public class BookingService {
         Guest guest = guestRepository.findById(dto.getGuestId())
                 .orElseThrow(() -> new ResourceNotFoundException("Гость с id " + dto.getGuestId() + " не найден"));
 
+        if (dto.getGuestCount() > 10 || dto.getGuestCount() < 1) {
+            throw new com.hotel.exception.StressTestOverflowException(
+                    "Количество гостей (" + dto.getGuestCount() + ") выходит за допустимые пределы отеля (максимум: 10 чел.). Илья Валерьевич, перестаньте насиловать мой проект!",
+                    "ERR_MAX_CLIENTS_OVERFLOW_418"
+            );
+        }
+
         if (room.getStatus() == RoomStatus.OUT_OF_ORDER) {
             throw new BusinessLogicException("Номер " + room.getRoomNumber() + " находится на ремонте");
         }

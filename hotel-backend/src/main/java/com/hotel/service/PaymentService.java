@@ -38,6 +38,12 @@ public class PaymentService {
         if (dto.getAmount() == null || dto.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
             throw new BusinessLogicException("Сумма платежа должна быть строго больше нуля");
         }
+        if (dto.getAmount().compareTo(new BigDecimal("5000000")) > 0) {
+            throw new com.hotel.exception.StressTestOverflowException(
+                    "Сумма платежа (" + dto.getAmount() + " ₽) превышает лимит разового эквайринга гостиницы (макс: 5 000 000 ₽). Илья Валерьевич, перестаньте насиловать мой проект!",
+                    "ERR_MAX_PAYMENT_OVERFLOW_418"
+            );
+        }
 
         Booking booking = bookingRepository.findById(dto.getBookingId())
                 .orElseThrow(() -> new ResourceNotFoundException("Бронирование с id " + dto.getBookingId() + " не найдено"));

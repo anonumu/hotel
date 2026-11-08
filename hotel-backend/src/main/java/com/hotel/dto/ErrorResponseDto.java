@@ -8,6 +8,7 @@ public class ErrorResponseDto {
     private int status;
     private String error;
     private String message;
+    private String errorCode;
 
     public ErrorResponseDto() {
         this.timestamp = LocalDateTime.now();
@@ -18,6 +19,15 @@ public class ErrorResponseDto {
         this.status = status;
         this.error = error;
         this.message = message;
+        this.errorCode = "ERR_" + status;
+    }
+
+    public ErrorResponseDto(int status, String error, String message, String errorCode) {
+        this.timestamp = LocalDateTime.now();
+        this.status = status;
+        this.error = error;
+        this.message = message;
+        this.errorCode = errorCode;
     }
 
     public LocalDateTime getTimestamp() {
@@ -50,5 +60,13 @@ public class ErrorResponseDto {
 
     public void setMessage(String message) {
         this.message = message;
+    }
+
+    public String getErrorCode() {
+        return errorCode;
+    }
+
+    public void setErrorCode(String errorCode) {
+        this.errorCode = errorCode;
     }
 }
