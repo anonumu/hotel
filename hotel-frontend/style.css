@@ -1481,11 +1481,11 @@ body {
 .hotel-door.CLEANING .door-threshold { background: #0284c7; }
 .hotel-door.OUT_OF_ORDER .door-threshold { background: #64748b; }
 
-/* Всплывающая карточка номера */
+/* Всплывающая карточка номера с надежным hover-мостиком */
 .door-popover {
   position: absolute;
   top: -8px;
-  left: calc(100% + 12px);
+  left: calc(100% + 8px);
   width: 280px;
   background: #ffffff;
   border: 1px solid var(--slate-200);
@@ -1496,15 +1496,27 @@ body {
   opacity: 0;
   visibility: hidden;
   transform: translateX(-4px);
-  transition: all 0.15s ease;
+  transition: opacity 0.18s cubic-bezier(0.16, 1, 0.3, 1), transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
   pointer-events: none;
 }
 
-.door-wrapper:hover .door-popover {
-  opacity: 1;
-  visibility: visible;
-  transform: translateX(0);
-  pointer-events: auto;
+/* Невидимый мостик, перекрывающий зазор между дверью и окном, исключающий сброс курсора */
+.door-popover::before {
+  content: '';
+  position: absolute;
+  top: -12px;
+  bottom: -12px;
+  left: -24px;
+  width: 24px;
+  background: transparent;
+}
+
+.door-wrapper:hover .door-popover,
+.door-popover:hover {
+  opacity: 1 !important;
+  visibility: visible !important;
+  transform: translateX(0) !important;
+  pointer-events: auto !important;
 }
 
 .popover-header {

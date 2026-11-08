@@ -5,9 +5,11 @@ import com.hotel.exception.BusinessLogicException;
 import com.hotel.exception.ResourceNotFoundException;
 import com.hotel.model.Booking;
 import com.hotel.model.BookingStatus;
+import com.hotel.model.Payment;
 import com.hotel.model.Room;
 import com.hotel.model.RoomStatus;
 import com.hotel.repository.BookingRepository;
+import com.hotel.repository.PaymentRepository;
 import com.hotel.repository.RoomRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,10 +24,12 @@ public class RoomService {
 
     private final RoomRepository roomRepository;
     private final BookingRepository bookingRepository;
+    private final PaymentRepository paymentRepository;
 
-    public RoomService(RoomRepository roomRepository, BookingRepository bookingRepository) {
+    public RoomService(RoomRepository roomRepository, BookingRepository bookingRepository, PaymentRepository paymentRepository) {
         this.roomRepository = roomRepository;
         this.bookingRepository = bookingRepository;
+        this.paymentRepository = paymentRepository;
     }
 
     // Получение всех номеров
@@ -139,14 +143,20 @@ public class RoomService {
         List<Booking> bookings = bookingRepository.findByRoomId(id);
         if (!bookings.isEmpty()) {
             long activeCount = bookings.stream()
-                    .filter(b -> b.getStatus() != BookingStatus.CANCELLED)
+                    .filter(b -> b.getStatus() != BookingStatus.CANCELLED && b.getStatus() != BookingStatus.CHECKED_OUT)
                     .count();
             if (activeCount > 0) {
                 throw new BusinessLogicException("Нельзя удалить номер № " + room.getRoomNumber() + 
-                        ", так как по нему есть активные бронирования (" + activeCount + " шт.). Сначала завершите или отмените их.");
-            } else {
-                throw new BusinessLogicException("Нельзя удалить номер № " + room.getRoomNumber() + 
-                        ", так как в системе сохранена история бронирований (" + bookings.size() + " шт.). Рекомендуется перевести его в статус 'На ремонте'.");
+                        ", так как в нём сейчас проживают гости или оформлена активная бронь (" + activeCount + " шт.). Сначала выселите гостя или отмените бронь.");
+            }
+            // Если все бронирования по номеру уже завершены (CHECKED_OUT) или отменены (CANCELLED),
+            // удаляем архивные бронирования и их платежи, чтобы номер можно было удалить
+            for (Booking b : bookings) {
+                List<Payment> payments = paymentRepository.findByBookingId(b.getId());
+                if (!payments.isEmpty()) {
+                    paymentRepository.deleteAll(payments);
+                }
+                bookingRepository.delete(b);
             }
         }
         roomRepository.delete(room);

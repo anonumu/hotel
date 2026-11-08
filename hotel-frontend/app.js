@@ -113,7 +113,9 @@ function checkFloodProtection() {
   while (apiCallHistory.length && apiCallHistory[0] < now - 2000) {
     apiCallHistory.shift();
   }
-  if (apiCallHistory.length > 8) {
+  // Порог защиты от флуда поднят до 45 запросов за 2 секунды (настоящая DDOS / стресс-атака циклами),
+  // чтобы штатная параллельная загрузка представлений (10-15 запросов) не блокировала работу оператора!
+  if (apiCallHistory.length > 45) {
     triggerSamsonovStressOverlay({
       code: 'ERR_DATABASE_OVERLOAD_FLOOD_429',
       source: 'Стресс-тестирование базы данных (Шквал одновременных запросов)',
@@ -148,6 +150,7 @@ function dismissStressOverlay() {
   const overlay = document.getElementById('samsonov-stress-screen');
   if (overlay) overlay.style.display = 'none';
   stressOverlayActive = false;
+  apiCallHistory.length = 0; // Сбрасываем историю вызовов
   document.body.style.overflow = '';
 
   // Сброс потенциально экстремальных значений в полях ввода
@@ -395,10 +398,11 @@ function mockApi(endpoint, options = {}) {
         return room;
       }
       if (method === 'DELETE') {
-        const bookings = store.bookings.filter(b => b.roomId === id);
-        if (bookings.length > 0) {
-          throw new Error(`Нельзя удалить номер № ${room ? room.roomNumber : id}, к нему привязаны бронирования`);
+        const activeBookings = store.bookings.filter(b => b.roomId === id && b.status !== 'CANCELLED' && b.status !== 'CHECKED_OUT');
+        if (activeBookings.length > 0) {
+          throw new Error(`Нельзя удалить номер № ${room ? room.roomNumber : id}, так как в нём сейчас проживают гости или оформлена активная бронь (${activeBookings.length} шт.).`);
         }
+        store.bookings = store.bookings.filter(b => b.roomId !== id);
         store.rooms = store.rooms.filter(r => r.id !== id);
         return null;
       }
@@ -1015,7 +1019,7 @@ function renderDashboardCockpit() {
       <div class="cockpit-subcard">
         <div class="cockpit-subcard-sum">${formatRub(stayCost)}</div>
         <div class="cockpit-subcard-label">Тариф номера (${nights} ноч.)</div>
-        <div class="cockpit-subcard-date">${selBook.checkInDate} &rarr; ${selBook.checkOutDate}</div>
+        <div class="cockpit-subcard-date">${selBook.checkInDate} → ${selBook.checkOutDate}</div>
       </div>
       <div class="cockpit-subcard">
         <div class="cockpit-subcard-sum">${selRoom ? `№ ${selRoom.roomNumber}` : '—'}</div>
@@ -1191,7 +1195,7 @@ function generateDoorHtml(room) {
       occupantName = `${guest.firstName} ${guest.lastName}`;
       guestPhone = guest.phone;
     }
-    datesText = `${activeBook.checkInDate} &rarr; ${activeBook.checkOutDate}`;
+    datesText = `${activeBook.checkInDate} → ${activeBook.checkOutDate}`;
     const nights = calculateNights(activeBook.checkInDate, activeBook.checkOutDate);
     nightsHtml = `<span class="stay-nights-pill">${nights} ноч.</span>`;
     remainingBadge = getRemainingNightsBadge(activeBook.checkOutDate, activeBook.status);
@@ -1374,7 +1378,7 @@ function renderCurrentOccupantsTable() {
         <td>${escapeHtml(g.phone)}</td>
         <td><code>${escapeHtml(g.passportNumber)}</code></td>
         <td>
-          <div>${inDate || '—'} &rarr; ${outDate || '—'}</div>
+          <div>${inDate || '—'} → ${outDate || '—'}</div>
           <div style="margin-top:4px; display:flex; gap:6px; align-items:center">
             <span class="stay-nights-pill">${nights} ноч.</span>
             ${countdown}
@@ -1558,7 +1562,7 @@ async function renderBookings() {
             <div style="font-size:11px; color:var(--text-muted)">${LABELS.types[room?.type] || ''}</div>
           </td>
           <td>
-            <div style="font-weight:700">${b.checkInDate} &rarr; ${b.checkOutDate}</div>
+            <div style="font-weight:700">${b.checkInDate} → ${b.checkOutDate}</div>
             <div style="margin-top:4px; display:flex; align-items:center; gap:5px; flex-wrap:wrap">
               <span class="stay-nights-pill">${stayNights} ноч.</span>
               ${remainingBadge}
@@ -1858,7 +1862,7 @@ async function renderGuests() {
         <span class="room-assigned-pill">
           № ${room ? room.roomNumber : (bRoomId || '—')} (${room ? LABELS.types[room.type] || room.type : ''})
         </span>
-        <div style="font-size:11px; color:var(--text-muted); margin-top:2px">${inDate || '—'} &rarr; ${outDate || '—'}</div>
+        <div style="font-size:11px; color:var(--text-muted); margin-top:2px">${inDate || '—'} → ${outDate || '—'}</div>
         <div style="margin-top:3px; display:flex; align-items:center; gap:5px; flex-wrap:wrap">
           <span class="stay-nights-pill">${nights} ноч.</span>
           ${remainingBadge}
@@ -1879,7 +1883,7 @@ async function renderGuests() {
         <span class="room-assigned-pill" style="border-color:#d4c8b6">
           Забронирован № ${room ? room.roomNumber : bRoomId}
         </span>
-        <div style="font-size:11px; color:var(--text-muted); margin-top:2px">${confirmedBooking.checkInDate} &rarr; ${confirmedBooking.checkOutDate}</div>
+        <div style="font-size:11px; color:var(--text-muted); margin-top:2px">${confirmedBooking.checkInDate} → ${confirmedBooking.checkOutDate}</div>
         <div style="margin-top:3px; display:flex; align-items:center; gap:5px; flex-wrap:wrap">
           <span class="stay-nights-pill">${nights} ноч.</span>
           ${remainingBadge}
@@ -2160,7 +2164,7 @@ async function renderTariffs() {
         <td><strong>${escapeHtml(t.name)}</strong></td>
         <td>${LABELS.types[t.roomType] || t.roomType}</td>
         <td><strong>${formatRub(t.pricePerNight)}</strong></td>
-        <td>${t.seasonStart ? `${t.seasonStart} &rarr; ${t.seasonEnd}` : 'Круглый год'}</td>
+        <td>${t.seasonStart ? `${t.seasonStart} → ${t.seasonEnd}` : 'Круглый год'}</td>
         <td>
           <span class="door-hanger-card ${t.active ? 'AVAILABLE' : 'OUT_OF_ORDER'}" style="display:inline-block; padding:2px 7px; margin:0">
             ${t.active ? 'Активен' : 'Архив'}
