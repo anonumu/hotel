@@ -17,28 +17,11 @@
   <header class="navbar">
     <div class="navbar-container">
       <div class="brand-section">
-        <div class="brand-emblem" title="Grand Impérial • Hotel & Suites">
-          <svg class="brand-svg-logo" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect x="2" y="2" width="40" height="40" rx="9" stroke="url(#brassGradLogo)" stroke-width="1.8" fill="#1b1916"/>
-            <!-- Корона / фасад гранд-отеля -->
-            <path d="M12 15L22 9L32 15L30 20H14L12 15Z" stroke="url(#brassGradLogo)" stroke-width="1.3" stroke-linejoin="round"/>
-            <!-- Колонны портика -->
-            <path d="M16 20V31M22 20V31M28 20V31" stroke="url(#brassGradLogo)" stroke-width="1.4" stroke-linecap="round"/>
-            <!-- Основание / стилобат -->
-            <path d="M11 31H33M9 34H35" stroke="url(#brassGradLogo)" stroke-width="1.5" stroke-linecap="round"/>
-            <!-- Звезда качества -->
-            <circle cx="22" cy="14" r="1.3" fill="#dfcaa6"/>
-            <defs>
-              <linearGradient id="brassGradLogo" x1="0" y1="0" x2="44" y2="44" gradientUnits="userSpaceOnUse">
-                <stop offset="0%" stop-color="#eddac2"/>
-                <stop offset="50%" stop-color="#b89b6c"/>
-                <stop offset="100%" stop-color="#80623d"/>
-              </linearGradient>
-            </defs>
-          </svg>
+        <div class="brand-emblem" title="Grand Impérial • Hotel & Residences">
+          <span class="brand-monogram-text">GI</span>
         </div>
         <div class="brand-title">
-          <div class="brand-kicker">AUTONOMOUS HOSPITALITY CORE &bull; LUXURY SUITES</div>
+          <div class="brand-kicker">HÔTEL &bull; RÉSIDENCES &bull; 1904</div>
           <h1 class="brand-main">GRAND IMPÉRIAL</h1>
           <div class="brand-credentials">
             <span class="cred-pill">Студент: Сигналов В. А. (3 ИС-3)</span>
@@ -455,22 +438,27 @@
           </div>
 
           <div class="form-group full">
-            <label>Выберите свободный номер для заселения</label>
+            <label>Выберите номер для заселения</label>
             <select id="checkin-room-select" class="form-control" required onchange="recalculateCheckInSummary()"></select>
           </div>
 
           <div class="form-group">
-            <label>Дата заезда</label>
-            <input type="date" id="checkin-date-in" class="form-control" required onchange="recalculateCheckInSummary()">
+            <label>Количество ночей</label>
+            <input type="number" id="checkin-nights" class="form-control" min="1" max="90" value="3" required oninput="onQuickCheckInNightsInput()" onchange="onQuickCheckInNightsInput()">
           </div>
 
           <div class="form-group">
-            <label>Дата выезда</label>
-            <input type="date" id="checkin-date-out" class="form-control" required onchange="recalculateCheckInSummary()">
+            <label>Дата заезда</label>
+            <input type="date" id="checkin-date-in" class="form-control" required onchange="onQuickCheckInDateChange()">
           </div>
 
           <div class="form-group full">
-            <div id="checkin-calc-summary" style="padding:10px 12px; background:var(--brass-light); border:1px solid #d4c8b6; border-radius:6px; font-size:12px; color:var(--text-main)"></div>
+            <label>Дата выезда (рассчитана автоматически)</label>
+            <input type="date" id="checkin-date-out" class="form-control" required onchange="onQuickCheckInOutDateChange()">
+          </div>
+
+          <div class="form-group full">
+            <div id="checkin-calc-summary" style="padding:10px 14px; background:var(--brass-light); border:1px solid #d4c8b6; border-radius:6px; font-size:12.5px; color:var(--text-main)"></div>
           </div>
         </div>
         <div class="modal-footer">
@@ -579,23 +567,30 @@
           <div id="modal-add-booking-alert" class="modal-alert full" style="display:none"></div>
           <div class="form-group full">
             <label>Номер</label>
-            <select id="newbook-room" class="form-control" required></select>
+            <select id="newbook-room" class="form-control" required onchange="recalculateBookingSummary()"></select>
           </div>
           <div class="form-group full">
             <label>Гость</label>
             <select id="newbook-guest" class="form-control" required></select>
           </div>
           <div class="form-group">
-            <label>Дата заезда</label>
-            <input type="date" id="newbook-checkin" class="form-control" required>
+            <label>Количество ночей</label>
+            <input type="number" id="newbook-nights" class="form-control" value="3" min="1" max="90" required oninput="onBookingNightsChange()" onchange="onBookingNightsChange()">
           </div>
           <div class="form-group">
-            <label>Дата выезда</label>
-            <input type="date" id="newbook-checkout" class="form-control" required>
-          </div>
-          <div class="form-group full">
             <label>Количество гостей</label>
             <input type="number" id="newbook-count" class="form-control" value="2" min="1" max="8" required>
+          </div>
+          <div class="form-group">
+            <label>Дата заезда</label>
+            <input type="date" id="newbook-checkin" class="form-control" required onchange="onBookingCheckInDateChange()">
+          </div>
+          <div class="form-group">
+            <label>Дата выезда (расчёт)</label>
+            <input type="date" id="newbook-checkout" class="form-control" required onchange="onBookingCheckOutDateChange()">
+          </div>
+          <div class="form-group full">
+            <div id="newbook-calc-summary" style="padding:10px 14px; background:var(--brass-light); border:1px solid #d4c8b6; border-radius:6px; font-size:12.5px; color:var(--text-main)"></div>
           </div>
         </div>
         <div class="modal-footer">

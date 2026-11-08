@@ -105,18 +105,23 @@ public class GuestService {
         return guestRepository.save(guest);
     }
 
-    // Заселение гостя (с автоматической или явной привязкой к номеру)
+    // Заселение гостя (с автоматической или явной привязкой к номеру и расчетным сроком ночей)
     public Guest checkInGuest(Long id) {
-        return checkInGuest(id, null);
+        return checkInGuest(id, null, null);
     }
 
     public Guest checkInGuest(Long id, Long roomId) {
+        return checkInGuest(id, roomId, null);
+    }
+
+    public Guest checkInGuest(Long id, Long roomId, Integer nights) {
         Guest guest = getGuestById(id);
         if (guest.isCheckedIn()) {
             throw new BusinessLogicException("Гость " + guest.getFirstName() + " " + guest.getLastName() + " уже заселен в номер");
         }
 
         LocalDate today = LocalDate.now();
+        int stayNights = (nights != null && nights > 0) ? nights : 3;
 
         if (roomId != null) {
             Room room = roomRepository.findById(roomId)
@@ -137,25 +142,37 @@ public class GuestService {
                     id, Arrays.asList(BookingStatus.CONFIRMED, BookingStatus.PENDING)
             );
 
+            LocalDate outDate = today.plusDays(stayNights);
+
             if (activeBooking.isPresent()) {
                 Booking booking = activeBooking.get();
                 booking.setRoom(room);
                 booking.setStatus(BookingStatus.CHECKED_IN);
+                booking.setCheckInDate(today);
+                if (nights != null && nights > 0) {
+                    booking.setCheckOutDate(outDate);
+                    booking.setTotalPrice(room.getPricePerNight().multiply(BigDecimal.valueOf(stayNights)));
+                } else if (booking.getCheckOutDate() != null) {
+                    outDate = booking.getCheckOutDate();
+                } else {
+                    booking.setCheckOutDate(outDate);
+                }
                 room.setStatus(RoomStatus.OCCUPIED);
                 roomRepository.save(room);
                 bookingRepository.save(booking);
-                guest.setCheckInDate(booking.getCheckInDate() != null ? booking.getCheckInDate() : today);
-                guest.setCheckOutDate(booking.getCheckOutDate() != null ? booking.getCheckOutDate() : today.plusDays(3));
+
+                guest.setCheckInDate(today);
+                guest.setCheckOutDate(outDate);
             } else {
-                // Создаем прямое оперативное бронирование на 3 суток
+                // Создаем прямое оперативное бронирование
                 Booking booking = new Booking();
                 booking.setRoom(room);
                 booking.setGuest(guest);
                 booking.setCheckInDate(today);
-                booking.setCheckOutDate(today.plusDays(3));
+                booking.setCheckOutDate(outDate);
                 booking.setStatus(BookingStatus.CHECKED_IN);
                 booking.setGuestCount(Math.min(2, room.getMaxGuests()));
-                booking.setTotalPrice(room.getPricePerNight().multiply(BigDecimal.valueOf(3)));
+                booking.setTotalPrice(room.getPricePerNight().multiply(BigDecimal.valueOf(stayNights)));
                 booking.setCreatedAt(LocalDateTime.now());
 
                 room.setStatus(RoomStatus.OCCUPIED);
@@ -163,14 +180,14 @@ public class GuestService {
                 bookingRepository.save(booking);
 
                 guest.setCheckInDate(today);
-                guest.setCheckOutDate(today.plusDays(3));
+                guest.setCheckOutDate(outDate);
             }
 
             guest.setCheckedIn(true);
             return guestRepository.save(guest);
         }
 
-        // Если roomId не передан, проверяем существующую подтвержденную бронь
+        // Если roomId не передан, заселяем по существующей подтвержденной брони
         Optional<Booking> activeBooking = bookingRepository.findFirstByGuestIdAndStatusIn(
                 id, Arrays.asList(BookingStatus.CONFIRMED, BookingStatus.PENDING)
         );
@@ -181,14 +198,20 @@ public class GuestService {
             if (room.getStatus() == RoomStatus.OUT_OF_ORDER) {
                 throw new BusinessLogicException("Забронированный номер " + room.getRoomNumber() + " находится на ремонте");
             }
+            if (room.getStatus() == RoomStatus.OCCUPIED) {
+                throw new BusinessLogicException("Номер " + room.getRoomNumber() + " уже занят другим гостем");
+            }
             booking.setStatus(BookingStatus.CHECKED_IN);
+            booking.setCheckInDate(today);
+            LocalDate outDate = booking.getCheckOutDate() != null ? booking.getCheckOutDate() : today.plusDays(stayNights);
+
             room.setStatus(RoomStatus.OCCUPIED);
             roomRepository.save(room);
             bookingRepository.save(booking);
 
             guest.setCheckedIn(true);
-            guest.setCheckInDate(booking.getCheckInDate() != null ? booking.getCheckInDate() : today);
-            guest.setCheckOutDate(booking.getCheckOutDate() != null ? booking.getCheckOutDate() : today.plusDays(3));
+            guest.setCheckInDate(today);
+            guest.setCheckOutDate(outDate);
             return guestRepository.save(guest);
         } else {
             throw new BusinessLogicException("У гостя " + guest.getFirstName() + " " + guest.getLastName() +

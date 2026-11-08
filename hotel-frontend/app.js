@@ -506,6 +506,8 @@ function mockApi(endpoint, options = {}) {
 
       const urlObj = new URL('http://dummy.com' + endpoint);
       const roomIdParam = urlObj.searchParams.get('roomId');
+      const nightsParam = urlObj.searchParams.get('nights');
+      const stayNights = (nightsParam && parseInt(nightsParam) > 0) ? parseInt(nightsParam) : 3;
       const today = new Date().toISOString().split('T')[0];
 
       if (roomIdParam) {
@@ -520,18 +522,20 @@ function mockApi(endpoint, options = {}) {
         guest.checkedIn = true;
         guest.checkInDate = today;
 
+        const outDate = new Date();
+        outDate.setDate(new Date().getDate() + stayNights);
+        const outDateStr = outDate.toISOString().split('T')[0];
+        guest.checkOutDate = outDateStr;
+
         // Привязываем существующую или создаем новую бронь
         let b = store.bookings.find(x => x.guestId === guestId && (x.status === 'CONFIRMED' || x.status === 'PENDING'));
         if (b) {
           b.roomId = roomId;
           b.status = 'CHECKED_IN';
-          guest.checkOutDate = b.checkOutDate;
+          b.checkInDate = today;
+          b.checkOutDate = outDateStr;
+          b.totalPrice = room.pricePerNight * stayNights;
         } else {
-          const outDate = new Date();
-          outDate.setDate(new Date().getDate() + 3);
-          const outDateStr = outDate.toISOString().split('T')[0];
-          guest.checkOutDate = outDateStr;
-
           store.bookings.push({
             id: Date.now(),
             roomId: roomId,
@@ -539,7 +543,7 @@ function mockApi(endpoint, options = {}) {
             checkInDate: today,
             checkOutDate: outDateStr,
             status: 'CHECKED_IN',
-            totalPrice: room.pricePerNight * 3,
+            totalPrice: room.pricePerNight * stayNights,
             guestCount: Math.min(2, room.maxGuests),
             createdAt: new Date().toISOString()
           });
@@ -890,18 +894,26 @@ function renderFloorCorridors(rooms, selectedFloor) {
 // Генерация разметки реалистичной двери с всплывающим окном
 function generateDoorHtml(room) {
   // Поиск активной брони и гостя для этого номера
-  const activeBook = globalBookingsCache.find(b => (b.roomId === room.id || (b.room && b.room.id === room.id)) && b.status !== 'CANCELLED');
+  const activeBook = globalBookingsCache.find(b => 
+    (b.roomId === room.id || (b.room && b.room.id === room.id)) && 
+    b.status !== 'CANCELLED' && b.status !== 'CHECKED_OUT'
+  );
   let occupantName = null;
   let datesText = null;
   let guestPhone = null;
+  let nightsHtml = '';
+  let remainingBadge = '';
 
   if (activeBook) {
-    const guest = activeBook.guest || globalGuestsCache.find(g => g.id === (activeBook.guestId || activeBook.guest_id));
+    const guest = activeBook.guest || globalGuestsCache.find(g => g.id === (activeBook.guestId || activeBook.guest_id || (activeBook.guest && activeBook.guest.id)));
     if (guest) {
       occupantName = `${guest.firstName} ${guest.lastName}`;
       guestPhone = guest.phone;
-      datesText = `${activeBook.checkInDate} &rarr; ${activeBook.checkOutDate}`;
     }
+    datesText = `${activeBook.checkInDate} &rarr; ${activeBook.checkOutDate}`;
+    const nights = calculateNights(activeBook.checkInDate, activeBook.checkOutDate);
+    nightsHtml = `<span class="stay-nights-pill">${nights} ноч.</span>`;
+    remainingBadge = getRemainingNightsBadge(activeBook.checkOutDate, activeBook.status);
   }
 
   // Описание для всплывающей карточки
@@ -912,7 +924,11 @@ function generateDoorHtml(room) {
         <div class="title">Проживающий постоялец:</div>
         <div style="font-weight:700; color:var(--text-main)">${escapeHtml(occupantName || 'Постоялец')}</div>
         <div style="color:var(--text-muted); font-size:11px; margin-top:2px">${datesText || 'Период не указан'}</div>
-        ${guestPhone ? `<div style="color:var(--text-secondary); font-size:11px">${escapeHtml(guestPhone)}</div>` : ''}
+        <div style="margin-top:6px; display:flex; gap:6px; align-items:center; flex-wrap:wrap">
+          ${nightsHtml}
+          ${remainingBadge}
+        </div>
+        ${guestPhone ? `<div style="color:var(--text-secondary); font-size:11px; margin-top:4px">${escapeHtml(guestPhone)}</div>` : ''}
       </div>
     `;
   } else if (room.status === 'BOOKED') {
@@ -921,6 +937,10 @@ function generateDoorHtml(room) {
         <div class="title">Бронь оформлена на:</div>
         <div style="font-weight:700; color:var(--text-main)">${escapeHtml(occupantName || 'Гость')}</div>
         <div style="color:var(--text-muted); font-size:11px; margin-top:2px">Заезд ожидается: ${datesText || 'В ближайшие дни'}</div>
+        <div style="margin-top:6px; display:flex; gap:6px; align-items:center; flex-wrap:wrap">
+          ${nightsHtml}
+          ${remainingBadge}
+        </div>
       </div>
     `;
   } else if (room.status === 'CLEANING') {
@@ -1048,8 +1068,17 @@ function renderCurrentOccupantsTable() {
 
   tbody.innerHTML = activeGuests.map(g => {
     // Находим привязанную бронь и номер
-    const b = globalBookingsCache.find(x => x.guestId === g.id && x.status === 'CHECKED_IN');
-    const room = b ? globalRoomsCache.find(r => r.id === (b.roomId || b.room_id)) : null;
+    const b = globalBookingsCache.find(x => 
+      ((x.guestId === g.id) || (x.guest_id === g.id) || (x.guest && x.guest.id === g.id)) && 
+      (x.status === 'CHECKED_IN' || x.status === 'CONFIRMED')
+    );
+    const roomId = b ? (b.roomId || b.room_id || (b.room && b.room.id)) : null;
+    const room = roomId ? globalRoomsCache.find(r => r.id === roomId) : null;
+
+    const inDate = b ? b.checkInDate : g.checkInDate;
+    const outDate = b ? b.checkOutDate : g.checkOutDate;
+    const nights = calculateNights(inDate, outDate);
+    const countdown = getRemainingNightsBadge(outDate, 'CHECKED_IN');
 
     return `
       <tr>
@@ -1063,7 +1092,13 @@ function renderCurrentOccupantsTable() {
         </td>
         <td>${escapeHtml(g.phone)}</td>
         <td><code>${escapeHtml(g.passportNumber)}</code></td>
-        <td>${b ? `${b.checkInDate} &rarr; ${b.checkOutDate}` : 'Проживает'}</td>
+        <td>
+          <div>${inDate || '—'} &rarr; ${outDate || '—'}</div>
+          <div style="margin-top:4px; display:flex; gap:6px; align-items:center">
+            <span class="stay-nights-pill">${nights} ноч.</span>
+            ${countdown}
+          </div>
+        </td>
         <td>
           <button class="btn btn-xs btn-secondary" onclick="checkOutGuest(${g.id})">
             Выселить
@@ -1134,6 +1169,76 @@ function filterRoomsList() {
 }
 
 // ==========================================================================
+// ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ РАСЧЕТА ДАТ И НОЧЕЙ
+// ==========================================================================
+function calculateNights(checkInDateStr, checkOutDateStr) {
+  if (!checkInDateStr || !checkOutDateStr) return 1;
+  const d1 = new Date(checkInDateStr);
+  const d2 = new Date(checkOutDateStr);
+  if (isNaN(d1) || isNaN(d2) || d2 <= d1) return 1;
+  return Math.max(1, Math.ceil((d2 - d1) / (1000 * 60 * 60 * 24)));
+}
+
+function getRemainingNightsBadge(checkOutDateStr, status) {
+  if (!checkOutDateStr) return '';
+  if (status === 'CHECKED_OUT') {
+    return `<span class="countdown-badge finished">Выезд оформлен</span>`;
+  }
+  if (status === 'CANCELLED') {
+    return `<span class="countdown-badge finished">Аннулировано</span>`;
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const outDate = new Date(checkOutDateStr);
+  outDate.setHours(0, 0, 0, 0);
+  const diffDays = Math.round((outDate - today) / (1000 * 60 * 60 * 24));
+
+  if (status === 'CONFIRMED' || status === 'PENDING') {
+    if (diffDays <= 0) return `<span class="countdown-badge last-night">Заезд сегодня</span>`;
+    return `<span class="countdown-badge confirmed">Заезд через ${diffDays} дн.</span>`;
+  }
+
+  // Для проживающих гостей (CHECKED_IN / OCCUPIED)
+  if (diffDays < 0) {
+    return `<span class="countdown-badge overdue">Просрочено (${Math.abs(diffDays)} дн.)</span>`;
+  } else if (diffDays === 0) {
+    return `<span class="countdown-badge today-checkout">Выезд сегодня</span>`;
+  } else if (diffDays === 1) {
+    return `<span class="countdown-badge last-night">Осталась 1 ночь</span>`;
+  } else if (diffDays >= 2 && diffDays <= 4) {
+    return `<span class="countdown-badge in-progress">Осталось ${diffDays} ночи</span>`;
+  } else {
+    return `<span class="countdown-badge in-progress">Осталось ${diffDays} ночей</span>`;
+  }
+}
+
+// Единое реактивное обновление всех представлений
+async function refreshAllViews() {
+  try {
+    const [rooms, guests, bookings] = await Promise.all([
+      api('/rooms'),
+      api('/guests'),
+      api('/bookings')
+    ]);
+
+    if (rooms) globalRoomsCache = rooms;
+    if (guests) globalGuestsCache = guests;
+    if (bookings) globalBookingsCache = bookings;
+
+    await Promise.all([
+      renderDashboard(),
+      renderRooms(),
+      renderBookings(),
+      renderGuests(),
+      populateBookingSelects()
+    ]);
+  } catch (e) {
+    console.warn('Ошибка синхронизации представлений:', e);
+  }
+}
+
+// ==========================================================================
 // 3. БРОНИРОВАНИЯ
 // ==========================================================================
 async function renderBookings() {
@@ -1157,19 +1262,27 @@ async function renderBookings() {
     tbody.innerHTML = books.map(b => {
       const room = b.room || (rooms ? rooms.find(r => r.id === (b.roomId || b.room_id)) : null);
       const guest = b.guest || (guests ? guests.find(g => g.id === (b.guestId || b.guest_id)) : null);
+      const stayNights = calculateNights(b.checkInDate, b.checkOutDate);
+      const remainingBadge = getRemainingNightsBadge(b.checkOutDate, b.status);
 
       return `
         <tr>
           <td><strong>#${b.id}</strong></td>
           <td>
-            <strong>${guest ? `${escapeHtml(guest.firstName)} ${escapeHtml(guest.lastName)}` : 'Гость #' + b.guestId}</strong>
-            <div style="font-size:11px; color:var(--text-muted)">${guest?.phone || ''}</div>
+            <strong>${guest ? `${escapeHtml(guest.firstName)} ${escapeHtml(guest.lastName)}` : 'Гость #' + (b.guestId || '')}</strong>
+            <div style="font-size:11px; color:var(--text-muted)">${escapeHtml(guest?.phone || '')}</div>
           </td>
           <td>
             <strong>№ ${room?.roomNumber || '—'}</strong>
             <div style="font-size:11px; color:var(--text-muted)">${LABELS.types[room?.type] || ''}</div>
           </td>
-          <td>${b.checkInDate} &rarr; ${b.checkOutDate}</td>
+          <td>
+            <div style="font-weight:700">${b.checkInDate} &rarr; ${b.checkOutDate}</div>
+            <div style="margin-top:4px; display:flex; align-items:center; gap:5px; flex-wrap:wrap">
+              <span class="stay-nights-pill">${stayNights} ноч.</span>
+              ${remainingBadge}
+            </div>
+          </td>
           <td><strong>${formatRub(b.totalPrice)}</strong></td>
           <td>
             <span class="door-hanger-card ${b.status === 'CONFIRMED' ? 'BOOKED' : (b.status === 'CHECKED_IN' ? 'OCCUPIED' : 'CLEANING')}" style="display:inline-block; padding:2px 7px; margin:0">
@@ -1181,7 +1294,7 @@ async function renderBookings() {
               <button class="btn btn-xs btn-secondary" onclick="openInvoiceSheet(${b.id})">
                 Счёт
               </button>
-              ${b.status !== 'CANCELLED' ? `
+              ${b.status !== 'CANCELLED' && b.status !== 'CHECKED_OUT' ? `
                 <button class="btn btn-xs btn-danger" onclick="cancelBooking(${b.id})">
                   Отмена
                 </button>
@@ -1194,53 +1307,155 @@ async function renderBookings() {
   }
 }
 
-// Заполнение выпадающих списков при создании брони
+// Интерактивное управление ночами и датами в окне бронирования
+function onBookingNightsChange() {
+  const nightsInput = document.getElementById('newbook-nights');
+  const inInput = document.getElementById('newbook-checkin');
+  const outInput = document.getElementById('newbook-checkout');
+  const nights = parseInt(nightsInput?.value) || 1;
+  const inDate = inInput?.value ? new Date(inInput.value) : new Date();
+
+  const outDate = new Date(inDate);
+  outDate.setDate(inDate.getDate() + nights);
+  if (outInput) outInput.value = outDate.toISOString().split('T')[0];
+  recalculateBookingSummary();
+}
+
+function onBookingCheckInDateChange() {
+  const nightsInput = document.getElementById('newbook-nights');
+  const inInput = document.getElementById('newbook-checkin');
+  const outInput = document.getElementById('newbook-checkout');
+  const nights = parseInt(nightsInput?.value) || 1;
+  const inDate = inInput?.value ? new Date(inInput.value) : new Date();
+
+  const outDate = new Date(inDate);
+  outDate.setDate(inDate.getDate() + nights);
+  if (outInput) outInput.value = outDate.toISOString().split('T')[0];
+  recalculateBookingSummary();
+}
+
+function onBookingCheckOutDateChange() {
+  const inInput = document.getElementById('newbook-checkin');
+  const outInput = document.getElementById('newbook-checkout');
+  const nightsInput = document.getElementById('newbook-nights');
+  const inDate = new Date(inInput?.value);
+  const outDate = new Date(outInput?.value);
+
+  if (!isNaN(inDate) && !isNaN(outDate) && outDate > inDate) {
+    const nights = Math.max(1, Math.ceil((outDate - inDate) / (1000 * 60 * 60 * 24)));
+    if (nightsInput) nightsInput.value = nights;
+  }
+  recalculateBookingSummary();
+}
+
+function recalculateBookingSummary() {
+  const roomSelect = document.getElementById('newbook-room');
+  const selectedOption = roomSelect?.selectedOptions[0];
+  const summaryBox = document.getElementById('newbook-calc-summary');
+  if (!summaryBox || !selectedOption) return;
+
+  const roomId = parseInt(selectedOption.value);
+  const room = globalRoomsCache.find(r => r.id === roomId);
+  const inDateStr = document.getElementById('newbook-checkin')?.value;
+  const outDateStr = document.getElementById('newbook-checkout')?.value;
+  const nights = calculateNights(inDateStr, outDateStr);
+
+  if (!room) {
+    summaryBox.innerHTML = 'Выберите номер для расчета стоимости';
+    return;
+  }
+
+  // Проверка наложения с существующими активными бронями для этого номера
+  const hasConflict = globalBookingsCache.some(b => {
+    if (b.status === 'CANCELLED' || b.status === 'CHECKED_OUT') return false;
+    const bRoomId = b.roomId || (b.room && b.room.id);
+    if (bRoomId !== roomId) return false;
+    return (inDateStr < b.checkOutDate && outDateStr > b.checkInDate);
+  });
+
+  const total = nights * (room.pricePerNight || 0);
+  if (hasConflict) {
+    summaryBox.innerHTML = `
+      <span style="color:#b91c1c; font-weight:700">Внимание: Номер ${room.roomNumber} уже занят на эти даты!</span>
+      <div style="font-size:11.5px; color:#7f1d1d; margin-top:2px">Выберите другой свободный номер или измените даты заезда/выезда.</div>
+    `;
+  } else {
+    summaryBox.innerHTML = `
+      Расчёт: <strong>${nights} ноч.</strong> &times; ${formatRub(room.pricePerNight)}/сут. = <strong>${formatRub(total)}</strong>
+      <span style="color:#276738; margin-left:8px; font-weight:700">&#10003; Номер свободен на выбранный период</span>
+    `;
+  }
+}
+
+// Заполнение выпадающих списков при создании брони с актуальными статусами
 async function populateBookingSelects() {
   try {
-    const [rooms, guests] = await Promise.all([api('/rooms'), api('/guests')]);
+    const [rooms, guests, bookings] = await Promise.all([
+      api('/rooms'),
+      api('/guests'),
+      api('/bookings')
+    ]);
+
+    if (rooms) globalRoomsCache = rooms;
+    if (guests) globalGuestsCache = guests;
+    if (bookings) globalBookingsCache = bookings;
+
     const rSel = document.getElementById('newbook-room');
     const gSel = document.getElementById('newbook-guest');
 
     if (rSel && rooms) {
-      rSel.innerHTML = rooms.map(r => `
-        <option value="${r.id}">
-          № ${r.roomNumber} (${LABELS.types[r.type] || r.type}) — ${formatRub(r.pricePerNight)}/сут. [${LABELS.roomStatuses[r.status] || r.status}]
-        </option>
-      `).join('');
+      rSel.innerHTML = rooms.map(r => {
+        let statusText = LABELS.roomStatuses[r.status] || r.status;
+        return `
+          <option value="${r.id}" data-price="${r.pricePerNight}">
+            № ${r.roomNumber} (${LABELS.types[r.type] || r.type}) — ${formatRub(r.pricePerNight)}/сут. [${statusText}]
+          </option>
+        `;
+      }).join('');
     }
 
     if (gSel && guests) {
       gSel.innerHTML = guests.map(g => `
         <option value="${g.id}">
-          ${g.firstName} ${g.lastName} (паспорт: ${g.passportNumber})
+          ${escapeHtml(g.firstName)} ${escapeHtml(g.lastName)} (паспорт: ${escapeHtml(g.passportNumber)})
         </option>
       `).join('');
     }
 
     const today = new Date();
     const inDateStr = today.toISOString().split('T')[0];
+    const nights = 3;
     const outDate = new Date();
-    outDate.setDate(today.getDate() + 3);
+    outDate.setDate(today.getDate() + nights);
     const outDateStr = outDate.toISOString().split('T')[0];
 
     const inEl = document.getElementById('newbook-checkin');
     const outEl = document.getElementById('newbook-checkout');
+    const nightsEl = document.getElementById('newbook-nights');
+
     if (inEl && !inEl.value) inEl.value = inDateStr;
+    if (nightsEl && !nightsEl.value) nightsEl.value = nights;
     if (outEl && !outEl.value) outEl.value = outDateStr;
+
+    recalculateBookingSummary();
   } catch (e) {
     console.warn('Ошибка списков бронирования:', e);
   }
 }
 
 // Открытие окна бронирования с предвыбранным номером
-function openBookingWithRoom(roomId) {
+async function openBookingWithRoom(roomId) {
+  await populateBookingSelects();
   openModal('modal-add-booking');
   const rSel = document.getElementById('newbook-room');
-  if (rSel) rSel.value = roomId;
+  if (rSel) {
+    rSel.value = roomId;
+    recalculateBookingSummary();
+  }
 }
 
 // ==========================================================================
-// 4. СЛУЖБА ПРИЕМА И ГОСТИ (Ясная привязка к номеру и быстрое заселение)
+// 4. СЛУЖБА ПРИЕМА И ГОСТИ (Ясная привязка к номеру, ночи и быстрое заселение)
 // ==========================================================================
 async function renderGuests() {
   const [guests, bookings, rooms] = await Promise.all([
@@ -1264,27 +1479,40 @@ async function renderGuests() {
   }
 
   tbody.innerHTML = guests.map(g => {
-    // Находим активную бронь этого гостя (с поддержкой разных форматов DTO)
-    const confirmedBooking = globalBookingsCache.find(b => 
-      ((b.guestId === g.id) || (b.guest_id === g.id) || (b.guest && b.guest.id === g.id)) && 
-      (b.status === 'CONFIRMED' || b.status === 'PENDING')
-    );
+    const gId = g.id;
+    const isGuestCheckedIn = g.checkedIn !== undefined ? g.checkedIn : g.isCheckedIn;
+
+    // Находим активную бронь этого гостя (с поддержкой разных структур DTO)
     const checkedInBooking = globalBookingsCache.find(b => 
-      ((b.guestId === g.id) || (b.guest_id === g.id) || (b.guest && b.guest.id === g.id)) && 
+      ((b.guestId === gId) || (b.guest_id === gId) || (b.guest && b.guest.id === gId)) && 
       b.status === 'CHECKED_IN'
+    );
+    const confirmedBooking = globalBookingsCache.find(b => 
+      ((b.guestId === gId) || (b.guest_id === gId) || (b.guest && b.guest.id === gId)) && 
+      (b.status === 'CONFIRMED' || b.status === 'PENDING')
     );
 
     let assignedRoomInfo = '<span style="color:var(--text-dim)">Бронь не оформлена</span>';
     let checkInActionBtn = '';
 
-    if (g.checkedIn && checkedInBooking) {
-      const bRoomId = checkedInBooking.roomId || checkedInBooking.room_id || (checkedInBooking.room && checkedInBooking.room.id);
+    if (isGuestCheckedIn || checkedInBooking) {
+      const activeB = checkedInBooking || confirmedBooking;
+      const bRoomId = activeB ? (activeB.roomId || activeB.room_id || (activeB.room && activeB.room.id)) : null;
       const room = globalRoomsCache.find(r => r.id === bRoomId);
+      const inDate = activeB ? activeB.checkInDate : g.checkInDate;
+      const outDate = activeB ? activeB.checkOutDate : g.checkOutDate;
+      const nights = calculateNights(inDate, outDate);
+      const remainingBadge = getRemainingNightsBadge(outDate, 'CHECKED_IN');
+
       assignedRoomInfo = `
         <span class="room-assigned-pill">
-          № ${room ? room.roomNumber : bRoomId} (${room ? LABELS.types[room.type] || room.type : ''})
+          № ${room ? room.roomNumber : (bRoomId || '—')} (${room ? LABELS.types[room.type] || room.type : ''})
         </span>
-        <div style="font-size:11px; color:var(--text-muted); margin-top:2px">${checkedInBooking.checkInDate} &rarr; ${checkedInBooking.checkOutDate}</div>
+        <div style="font-size:11px; color:var(--text-muted); margin-top:2px">${inDate || '—'} &rarr; ${outDate || '—'}</div>
+        <div style="margin-top:3px; display:flex; align-items:center; gap:5px; flex-wrap:wrap">
+          <span class="stay-nights-pill">${nights} ноч.</span>
+          ${remainingBadge}
+        </div>
       `;
       checkInActionBtn = `
         <button class="btn btn-xs btn-secondary" onclick="checkOutGuest(${g.id})">
@@ -1294,11 +1522,18 @@ async function renderGuests() {
     } else if (confirmedBooking) {
       const bRoomId = confirmedBooking.roomId || confirmedBooking.room_id || (confirmedBooking.room && confirmedBooking.room.id);
       const room = globalRoomsCache.find(r => r.id === bRoomId);
+      const nights = calculateNights(confirmedBooking.checkInDate, confirmedBooking.checkOutDate);
+      const remainingBadge = getRemainingNightsBadge(confirmedBooking.checkOutDate, 'CONFIRMED');
+
       assignedRoomInfo = `
         <span class="room-assigned-pill" style="border-color:#d4c8b6">
           Забронирован № ${room ? room.roomNumber : bRoomId}
         </span>
         <div style="font-size:11px; color:var(--text-muted); margin-top:2px">${confirmedBooking.checkInDate} &rarr; ${confirmedBooking.checkOutDate}</div>
+        <div style="margin-top:3px; display:flex; align-items:center; gap:5px; flex-wrap:wrap">
+          <span class="stay-nights-pill">${nights} ноч.</span>
+          ${remainingBadge}
+        </div>
       `;
       checkInActionBtn = `
         <button class="btn btn-xs btn-brass" onclick="checkInGuest(${g.id})">
@@ -1314,6 +1549,8 @@ async function renderGuests() {
       `;
     }
 
+    const isLive = isGuestCheckedIn || !!checkedInBooking;
+
     return `
       <tr>
         <td>
@@ -1325,8 +1562,8 @@ async function renderGuests() {
         <td>${escapeHtml(g.phone)}</td>
         <td>${escapeHtml(g.nationality || 'Россия')}</td>
         <td>
-          <span class="door-hanger-card ${g.checkedIn ? 'OCCUPIED' : (confirmedBooking ? 'BOOKED' : 'AVAILABLE')}" style="display:inline-block; padding:2px 8px; margin:0">
-            ${g.checkedIn ? 'Проживает' : (confirmedBooking ? 'Ожидает заезда' : 'Не заселен')}
+          <span class="door-hanger-card ${isLive ? 'OCCUPIED' : (confirmedBooking ? 'BOOKED' : 'AVAILABLE')}" style="display:inline-block; padding:2px 8px; margin:0">
+            ${isLive ? 'Проживает' : (confirmedBooking ? 'Ожидает заезда' : 'Не заселен')}
           </span>
         </td>
         <td>${checkInActionBtn}</td>
@@ -1335,7 +1572,7 @@ async function renderGuests() {
   }).join('');
 }
 
-// Открытие модального окна быстрого заселения (выбор номера)
+// Открытие модального окна быстрого заселения (выбор номера и ночей)
 function openQuickCheckInModal(guestId) {
   const guest = globalGuestsCache.find(g => g.id === guestId);
   if (!guest) return;
@@ -1357,12 +1594,16 @@ function openQuickCheckInModal(guestId) {
     `).join('');
   }
 
-  // Даты
+  // Задаем даты и ночи
   const today = new Date();
   const dateInStr = today.toISOString().split('T')[0];
+  const nights = 3;
   const outDate = new Date();
-  outDate.setDate(today.getDate() + 3);
+  outDate.setDate(today.getDate() + nights);
   const dateOutStr = outDate.toISOString().split('T')[0];
+
+  const nightsInput = document.getElementById('checkin-nights');
+  if (nightsInput) nightsInput.value = nights;
 
   document.getElementById('checkin-date-in').value = dateInStr;
   document.getElementById('checkin-date-out').value = dateOutStr;
@@ -1370,6 +1611,47 @@ function openQuickCheckInModal(guestId) {
   recalculateCheckInSummary();
   clearModalAlert('modal-quick-checkin');
   openModal('modal-quick-checkin');
+}
+
+// Интерактивное управление датами и ночами в окне быстрого заселения
+function onQuickCheckInNightsInput() {
+  const nightsInput = document.getElementById('checkin-nights');
+  const inInput = document.getElementById('checkin-date-in');
+  const outInput = document.getElementById('checkin-date-out');
+  const nights = parseInt(nightsInput?.value) || 1;
+  const inDate = inInput?.value ? new Date(inInput.value) : new Date();
+
+  const outDate = new Date(inDate);
+  outDate.setDate(inDate.getDate() + nights);
+  if (outInput) outInput.value = outDate.toISOString().split('T')[0];
+  recalculateCheckInSummary();
+}
+
+function onQuickCheckInDateChange() {
+  const nightsInput = document.getElementById('checkin-nights');
+  const inInput = document.getElementById('checkin-date-in');
+  const outInput = document.getElementById('checkin-date-out');
+  const nights = parseInt(nightsInput?.value) || 1;
+  const inDate = inInput?.value ? new Date(inInput.value) : new Date();
+
+  const outDate = new Date(inDate);
+  outDate.setDate(inDate.getDate() + nights);
+  if (outInput) outInput.value = outDate.toISOString().split('T')[0];
+  recalculateCheckInSummary();
+}
+
+function onQuickCheckInOutDateChange() {
+  const inInput = document.getElementById('checkin-date-in');
+  const outInput = document.getElementById('checkin-date-out');
+  const nightsInput = document.getElementById('checkin-nights');
+  const inDate = new Date(inInput?.value);
+  const outDate = new Date(outInput?.value);
+
+  if (!isNaN(inDate) && !isNaN(outDate) && outDate > inDate) {
+    const nights = Math.max(1, Math.ceil((outDate - inDate) / (1000 * 60 * 60 * 24)));
+    if (nightsInput) nightsInput.value = nights;
+  }
+  recalculateCheckInSummary();
 }
 
 // Перерасчет стоимости в окне быстрого заселения
@@ -1383,17 +1665,18 @@ function recalculateCheckInSummary() {
   }
 
   const pricePerNight = parseFloat(selectedOption.dataset.price) || 0;
-  const dateIn = new Date(document.getElementById('checkin-date-in').value);
-  const dateOut = new Date(document.getElementById('checkin-date-out').value);
+  const dateInStr = document.getElementById('checkin-date-in')?.value;
+  const dateOutStr = document.getElementById('checkin-date-out')?.value;
+  const nightsInput = document.getElementById('checkin-nights');
+  const nights = parseInt(nightsInput?.value) || calculateNights(dateInStr, dateOutStr);
 
-  if (isNaN(dateIn) || isNaN(dateOut) || dateIn >= dateOut) {
-    summaryBox.innerHTML = '<span style="color:#9b2c2c">Дата выезда должна быть строго позже даты заезда</span>';
-    return;
-  }
-
-  const nights = Math.max(1, Math.ceil((dateOut - dateIn) / (1000 * 60 * 60 * 24)));
   const total = nights * pricePerNight;
-  summaryBox.innerHTML = `Расчет: <strong>${nights} суток</strong> &times; ${formatRub(pricePerNight)} = <strong>${formatRub(total)}</strong>`;
+  summaryBox.innerHTML = `
+    Расчёт: <strong>${nights} суток</strong> &times; ${formatRub(pricePerNight)}/сут. = <strong>${formatRub(total)}</strong>
+    <div style="font-size:11.5px; color:var(--text-secondary); margin-top:2px">
+      Заезд: <strong>${dateInStr}</strong> &bull; Выезд: <strong>${dateOutStr}</strong> (останется: ${nights} ноч.)
+    </div>
+  `;
 }
 
 // Отправка быстрого заселения
@@ -1401,6 +1684,7 @@ async function submitQuickCheckIn(e) {
   e.preventDefault();
   const guestId = parseInt(document.getElementById('checkin-guest-id').value);
   const roomId = parseInt(document.getElementById('checkin-room-select').value);
+  const nights = parseInt(document.getElementById('checkin-nights').value) || 3;
 
   if (!roomId) {
     showModalAlert('modal-quick-checkin', 'Пожалуйста, выберите свободный номер');
@@ -1414,10 +1698,10 @@ async function submitQuickCheckIn(e) {
   clearModalAlert('modal-quick-checkin');
 
   try {
-    await api(`/guests/${guestId}/checkin?roomId=${roomId}`, { method: 'POST' });
+    await api(`/guests/${guestId}/checkin?roomId=${roomId}&nights=${nights}`, { method: 'POST' });
     notify('Гость успешно заселен в номер');
     closeModal('modal-quick-checkin');
-    await Promise.all([renderGuests(), renderDashboard(), renderRooms()]);
+    await refreshAllViews();
   } catch (err) {
     showModalAlert('modal-quick-checkin', err.message);
     notify(err.message, 'err');
@@ -1431,9 +1715,13 @@ async function checkInGuest(id) {
   try {
     await api(`/guests/${id}/checkin`, { method: 'POST' });
     notify('Гость успешно заселен в номер');
-    await Promise.all([renderGuests(), renderDashboard(), renderRooms()]);
+    await refreshAllViews();
   } catch (err) {
     notify(err.message, 'err');
+    // Если у гостя нет предварительной брони — сразу открываем окно выбора номера!
+    if (err.message && err.message.includes('нет активного бронирования')) {
+      openQuickCheckInModal(id);
+    }
   }
 }
 
@@ -1442,7 +1730,7 @@ async function checkOutGuest(id) {
   try {
     await api(`/guests/${id}/checkout`, { method: 'POST' });
     notify('Гость выселен, номер передан на уборку');
-    await Promise.all([renderGuests(), renderDashboard(), renderRooms()]);
+    await refreshAllViews();
   } catch (err) {
     notify(err.message, 'err');
   }
@@ -1690,6 +1978,9 @@ function openModal(id) {
   clearModalAlert(id);
   const m = document.getElementById(id);
   if (m) m.classList.add('active');
+  if (id === 'modal-add-booking') {
+    populateBookingSelects();
+  }
 }
 
 function closeModal(id) {
@@ -1724,8 +2015,7 @@ async function applyRoomStatus() {
     });
     notify('Статус номера обновлен');
     closeModal('modal-status');
-    renderRooms();
-    renderDashboard();
+    await refreshAllViews();
     renderReports();
   } catch (err) {
     showModalAlert('modal-status', err.message);
@@ -1781,9 +2071,8 @@ async function submitRoom(e) {
     notify(`Номер ${room.roomNumber} успешно добавлен`);
     closeModal('modal-add-room');
     e.target.reset();
-    renderRooms();
-    renderDashboard();
-    populateBookingSelects();
+    await refreshAllViews();
+    renderReports();
   } catch (err) {
     showModalAlert('modal-add-room', err.message);
     notify(err.message, 'err');
@@ -1797,9 +2086,8 @@ async function removeRoom(id) {
   try {
     await api(`/rooms/${id}`, { method: 'DELETE' });
     notify('Номер успешно удален');
-    renderRooms();
-    renderDashboard();
-    populateBookingSelects();
+    await refreshAllViews();
+    renderReports();
   } catch (err) {
     notify(err.message, 'err');
   }
@@ -1837,8 +2125,8 @@ async function submitBooking(e) {
     await api('/bookings', { method: 'POST', body: JSON.stringify(payload) });
     notify('Бронирование оформлено');
     closeModal('modal-add-booking');
-    renderBookings();
-    renderDashboard();
+    await refreshAllViews();
+    renderReports();
   } catch (err) {
     showModalAlert('modal-add-booking', err.message);
     notify(err.message, 'err');
@@ -1852,8 +2140,8 @@ async function cancelBooking(id) {
   try {
     await api(`/bookings/${id}`, { method: 'DELETE' });
     notify('Бронирование аннулировано');
-    renderBookings();
-    renderDashboard();
+    await refreshAllViews();
+    renderReports();
   } catch (err) {
     notify(err.message, 'err');
   }
@@ -1882,8 +2170,7 @@ async function submitGuest(e) {
     notify('Гость зарегистрирован в базе');
     closeModal('modal-add-guest');
     e.target.reset();
-    renderGuests();
-    populateBookingSelects();
+    await refreshAllViews();
   } catch (err) {
     showModalAlert('modal-add-guest', err.message);
     notify(err.message, 'err');
