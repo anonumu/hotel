@@ -168,7 +168,7 @@ function dismissStressOverlay() {
 
 // Глобальный триггер для демонстрации защиты на защите работы:
 // window.triggerSamsonovStressTest('CLIENTS' | 'AMOUNT' | 'OVERLOAD')
-window.triggerSamsonovStressTest = function(type = 'CLIENTS') {
+window.triggerSamsonovStressTest = function (type = 'CLIENTS') {
   if (type === 'CLIENTS') {
     triggerSamsonovStressOverlay({
       code: 'ERR_MAX_CLIENTS_TEST_OVERFLOW_418',
@@ -271,11 +271,11 @@ async function api(endpoint, options = {}) {
         errJson = await res.json();
         if (errJson && errJson.message) errorMsg = errJson.message;
         else if (errJson && errJson.error) errorMsg = errJson.error;
-      } catch (_) {}
+      } catch (_) { }
 
       // Перехват стресс-тестирования граничных значений и перегрузки (HTTP 418, 500, 503)
-      if (res.status === 418 || res.status === 500 || res.status === 503 || 
-          (errorMsg && (errorMsg.includes('Илья Валерьевич') || errorMsg.includes('ERR_SAMSONOV')))) {
+      if (res.status === 418 || res.status === 500 || res.status === 503 ||
+        (errorMsg && (errorMsg.includes('Илья Валерьевич') || errorMsg.includes('ERR_SAMSONOV')))) {
         triggerSamsonovStressOverlay({
           code: errJson?.errorCode || `ERR_HTTP_${res.status}_SAMSONOV_DEFENSE`,
           source: `REST API: ${options.method || 'GET'} ${endpoint} (Статус ${res.status})`,
@@ -1089,11 +1089,11 @@ function toggleActiveFilters() {
 function filterDashboardContent() {
   const cat = document.getElementById('dash-filter-category')?.value || '';
   const st = document.getElementById('dash-filter-status')?.value || '';
-  
+
   let filtered = globalRoomsCache;
   if (cat) filtered = filtered.filter(r => r.type === cat);
   if (st) filtered = filtered.filter(r => r.status === st);
-  
+
   renderFloorCorridors(filtered, currentFloorFilter);
 }
 
@@ -1103,8 +1103,8 @@ function handleGlobalSearch(query) {
     renderFloorCorridors(globalRoomsCache, currentFloorFilter);
     return;
   }
-  const filtered = globalRoomsCache.filter(r => 
-    r.roomNumber.toLowerCase().includes(q) || 
+  const filtered = globalRoomsCache.filter(r =>
+    r.roomNumber.toLowerCase().includes(q) ||
     (LABELS.types[r.type] || '').toLowerCase().includes(q) ||
     (LABELS.roomStatuses[r.status] || '').toLowerCase().includes(q)
   );
@@ -1175,8 +1175,8 @@ function renderFloorCorridors(rooms, selectedFloor) {
 // Генерация разметки реалистичной двери с всплывающим окном
 function generateDoorHtml(room) {
   // Поиск активной брони и гостя для этого номера
-  const activeBook = globalBookingsCache.find(b => 
-    (b.roomId === room.id || (b.room && b.room.id === room.id)) && 
+  const activeBook = globalBookingsCache.find(b =>
+    (b.roomId === room.id || (b.room && b.room.id === room.id)) &&
     b.status !== 'CANCELLED' && b.status !== 'CHECKED_OUT'
   );
   let occupantName = null;
@@ -1349,8 +1349,8 @@ function renderCurrentOccupantsTable() {
 
   tbody.innerHTML = activeGuests.map(g => {
     // Находим привязанную бронь и номер
-    const b = globalBookingsCache.find(x => 
-      ((x.guestId === g.id) || (x.guest_id === g.id) || (x.guest && x.guest.id === g.id)) && 
+    const b = globalBookingsCache.find(x =>
+      ((x.guestId === g.id) || (x.guest_id === g.id) || (x.guest && x.guest.id === g.id)) &&
       (x.status === 'CHECKED_IN' || x.status === 'CONFIRMED')
     );
     const roomId = b ? (b.roomId || b.room_id || (b.room && b.room.id)) : null;
@@ -1833,12 +1833,12 @@ async function renderGuests() {
     const isGuestCheckedIn = g.checkedIn !== undefined ? g.checkedIn : g.isCheckedIn;
 
     // Находим активную бронь этого гостя (с поддержкой разных структур DTO)
-    const checkedInBooking = globalBookingsCache.find(b => 
-      ((b.guestId === gId) || (b.guest_id === gId) || (b.guest && b.guest.id === gId)) && 
+    const checkedInBooking = globalBookingsCache.find(b =>
+      ((b.guestId === gId) || (b.guest_id === gId) || (b.guest && b.guest.id === gId)) &&
       b.status === 'CHECKED_IN'
     );
-    const confirmedBooking = globalBookingsCache.find(b => 
-      ((b.guestId === gId) || (b.guest_id === gId) || (b.guest && b.guest.id === gId)) && 
+    const confirmedBooking = globalBookingsCache.find(b =>
+      ((b.guestId === gId) || (b.guest_id === gId) || (b.guest && b.guest.id === gId)) &&
       (b.status === 'CONFIRMED' || b.status === 'PENDING')
     );
 
@@ -2256,8 +2256,8 @@ async function renderReports() {
   ]);
 
   if (occ) {
-    const rawRate = occ.occupancyRatePercentage !== undefined 
-      ? occ.occupancyRatePercentage 
+    const rawRate = occ.occupancyRatePercentage !== undefined
+      ? occ.occupancyRatePercentage
       : (occ.occupancyRate !== undefined ? occ.occupancyRate : 0);
     const rateVal = Math.round(Number(rawRate) || 0);
     const totalRooms = occ.totalRooms !== undefined ? occ.totalRooms : 0;
@@ -2281,8 +2281,8 @@ async function renderReports() {
 
   if (rev) {
     const totalRev = Number(rev.totalRevenue) || 0;
-    const txCount = rev.totalPaymentsCount !== undefined 
-      ? rev.totalPaymentsCount 
+    const txCount = rev.totalPaymentsCount !== undefined
+      ? rev.totalPaymentsCount
       : (rev.totalTransactions !== undefined ? rev.totalTransactions : 0);
     const byMethod = rev.revenueByPaymentMethod || rev.revenueByMethod || rev.byMethod || {};
 
@@ -2609,19 +2609,54 @@ async function openInvoiceSheet(bookingId) {
   const inv = await api(`/invoices/${bookingId}`);
   if (!inv) return;
 
-  document.getElementById('inv-code').innerText = inv.invoiceNumber;
-  document.getElementById('inv-date-val').innerText = `Дата: ${inv.issueDate}`;
-  document.getElementById('inv-guest-name').innerText = inv.guestFullName;
-  document.getElementById('inv-guest-passport').innerText = `Паспорт: ${inv.guestPassport}`;
-  document.getElementById('inv-guest-phone').innerText = `Телефон: ${inv.guestPhone}`;
-  document.getElementById('inv-room-info').innerText = `№ ${inv.roomNumber} (${LABELS.types[inv.roomType] || inv.roomType})`;
-  document.getElementById('inv-dates-info').innerText = `${inv.checkInDate} &rarr; ${inv.checkOutDate}`;
-  document.getElementById('inv-rate-info').innerText = `${formatRub(inv.pricePerNight)}/сутки (${inv.numberOfNights} ночей)`;
-  document.getElementById('inv-charge-total').innerText = formatRub(inv.totalAmount);
-  document.getElementById('inv-sum-total').innerText = formatRub(inv.totalAmount);
-  document.getElementById('inv-paid-sum').innerText = formatRub(inv.paidAmount);
-  document.getElementById('inv-due-sum').innerText = formatRub(inv.balanceDue);
-  document.getElementById('inv-status-label').innerText = inv.paymentStatus;
+  const invCode = document.getElementById('inv-code');
+  if (invCode) invCode.innerText = inv.invoiceNumber;
+
+  const invDate = document.getElementById('inv-date-val');
+  if (invDate) invDate.innerText = `Дата: ${inv.issueDate}`;
+
+  const invGuest = document.getElementById('inv-guest-name');
+  if (invGuest) invGuest.innerText = inv.guestFullName;
+
+  const invPassport = document.getElementById('inv-guest-passport');
+  if (invPassport) invPassport.innerText = `Паспорт: ${inv.guestPassport}`;
+
+  const invPhone = document.getElementById('inv-guest-phone');
+  if (invPhone) invPhone.innerText = `Телефон: ${inv.guestPhone}`;
+
+  const invRoom = document.getElementById('inv-room-info');
+  if (invRoom) invRoom.innerText = `№ ${inv.roomNumber} (${LABELS.types[inv.roomType] || inv.roomType})`;
+
+  const invDates = document.getElementById('inv-dates-info');
+  if (invDates) invDates.innerText = `${inv.checkInDate} → ${inv.checkOutDate}`;
+
+  const invRate = document.getElementById('inv-rate-info');
+  if (invRate) invRate.innerText = `${formatRub(inv.pricePerNight)}/сутки (${inv.numberOfNights} ночей)`;
+
+  // Заполняем тариф за сутки и количество суток в строках спецификации счёта
+  const rateUnitEl = document.getElementById('inv-rate-unit');
+  if (rateUnitEl) rateUnitEl.innerText = formatRub(inv.pricePerNight);
+
+  const nightsUnitEl = document.getElementById('inv-nights-unit');
+  if (nightsUnitEl) nightsUnitEl.innerText = `${inv.numberOfNights} сут.`;
+
+  const chargeTotal = document.getElementById('inv-charge-total');
+  if (chargeTotal) chargeTotal.innerText = formatRub(inv.roomTotal || inv.totalAmount);
+
+  const sumTotal = document.getElementById('inv-sum-total');
+  if (sumTotal) sumTotal.innerText = formatRub(inv.totalAmount);
+
+  const paidSum = document.getElementById('inv-paid-sum');
+  if (paidSum) paidSum.innerText = formatRub(inv.paidAmount);
+
+  const dueSum = document.getElementById('inv-due-sum');
+  if (dueSum) dueSum.innerText = formatRub(inv.balanceDue);
+
+  const statusLabel = document.getElementById('inv-status-label');
+  if (statusLabel) {
+    statusLabel.innerText = inv.paymentStatus;
+    statusLabel.className = `badge ${inv.balanceDue <= 0 ? 'badge-success' : 'badge-warning'}`;
+  }
 
   openModal('modal-folio');
 }
@@ -2688,7 +2723,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   // Мониторинг ввода граничных значений в реальном времени
   const bookCountInput = document.getElementById('newbook-count');
   if (bookCountInput) {
-    bookCountInput.addEventListener('input', function() {
+    bookCountInput.addEventListener('input', function () {
       const val = parseInt(this.value);
       if (val > 10 || val > 100) {
         triggerSamsonovStressOverlay({
@@ -2703,7 +2738,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   const payAmountInput = document.getElementById('pay-amount');
   if (payAmountInput) {
-    payAmountInput.addEventListener('input', function() {
+    payAmountInput.addEventListener('input', function () {
       const val = parseFloat(this.value);
       if (val > 5000000) {
         triggerSamsonovStressOverlay({
@@ -2718,7 +2753,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   const roomPriceInput = document.getElementById('add-room-price');
   if (roomPriceInput) {
-    roomPriceInput.addEventListener('input', function() {
+    roomPriceInput.addEventListener('input', function () {
       const val = parseFloat(this.value);
       if (val > 1000000) {
         triggerSamsonovStressOverlay({
