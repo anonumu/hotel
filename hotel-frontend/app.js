@@ -748,6 +748,37 @@ function mockApi(endpoint, options = {}) {
 // ==========================================================================
 // НАВИГАЦИЯ МЕЖДУ РАЗДЕЛАМИ
 // ==========================================================================
+const VIEW_METADATA = {
+  dashboard: {
+    title: 'Сводка и бронирования',
+    subtitle: 'Управление номерным фондом, постояльцами и кассой гостиницы в едином пространстве.'
+  },
+  rooms: {
+    title: 'Реестр номерного фонда',
+    subtitle: 'Каталог номеров отеля, категории, этажность, вместимость и тарифы.'
+  },
+  bookings: {
+    title: 'Журнал бронирований',
+    subtitle: 'Учет предварительных и активных броней номерного фонда комплекса.'
+  },
+  guests: {
+    title: 'Служба приема и постояльцы',
+    subtitle: 'Регистрация гостей, прикрепление к номерам и статус фактического проживания.'
+  },
+  staff: {
+    title: 'Штатное расписание и сотрудники',
+    subtitle: 'Управление рабочими сменами, должностями и показателями эффективности.'
+  },
+  tariffs: {
+    title: 'Тарифная сетка и касса',
+    subtitle: 'Базовые тарифы и кассовый журнал входящих финансовых платежей.'
+  },
+  reports: {
+    title: 'Финансовая аналитика и отчеты',
+    subtitle: 'Статистика загрузки фонда, динамика выручки и эффективность персонала.'
+  }
+};
+
 function setupNavigation() {
   document.querySelectorAll('.nav-item').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -765,6 +796,12 @@ function navigateTo(viewName) {
   const btn = document.querySelector(`.nav-item[data-view="${viewName}"]`);
   if (target) target.classList.add('active');
   if (btn) btn.classList.add('active');
+
+  const meta = VIEW_METADATA[viewName] || VIEW_METADATA.dashboard;
+  const titleEl = document.getElementById('page-main-title');
+  const subEl = document.getElementById('page-main-subtitle');
+  if (titleEl) titleEl.innerText = meta.title;
+  if (subEl) subEl.innerText = meta.subtitle;
 
   switch (viewName) {
     case 'dashboard': renderDashboard(); break;
@@ -784,6 +821,9 @@ let globalRoomsCache = [];
 let globalGuestsCache = [];
 let globalBookingsCache = [];
 let currentFloorFilter = 'all';
+
+let selectedCockpitBookingId = null;
+let cockpitFilterMode = 'ALL'; // 'ALL' | 'UNPAID' | 'CHECKED_IN'
 
 async function renderDashboard() {
   const [rooms, guests, rev, bookings] = await Promise.all([
@@ -817,6 +857,22 @@ async function renderDashboard() {
   const revEl = document.getElementById('dash-kpi-rev');
   if (revEl) revEl.innerText = formatRub(rev?.totalRevenue || 0);
 
+  // Средний срок проживания и касса в Bento карточках
+  const validBookings = globalBookingsCache.filter(b => b.status !== 'CANCELLED');
+  let avgNights = 3.4;
+  if (validBookings.length > 0) {
+    const totalNights = validBookings.reduce((sum, b) => sum + calculateNights(b.checkInDate, b.checkOutDate), 0);
+    avgNights = (totalNights / validBookings.length).toFixed(1);
+  }
+  const stayEl = document.getElementById('dash-kpi-stay');
+  if (stayEl) stayEl.innerText = `${avgNights} дня`;
+
+  const cashEl = document.getElementById('dash-kpi-cash');
+  if (cashEl) cashEl.innerText = formatRub(rev?.totalRevenue || 0);
+
+  // Отрисовка флагманского темного кокпита (Dual-Pane Master-Detail)
+  renderDashboardCockpit();
+
   // Отрисовка коридоров этажей с интерактивными дверями
   renderFloorCorridors(rooms, currentFloorFilter);
 
@@ -828,6 +884,208 @@ async function renderDashboard() {
     guests: globalGuestsCache.length,
     bookings: globalBookingsCache.length
   });
+}
+
+// Отрисовка флагманского двухпанельного темного кокпита
+function renderDashboardCockpit() {
+  const listEl = document.getElementById('cockpit-bookings-list');
+  const detailEl = document.getElementById('cockpit-detail-container');
+  if (!listEl || !detailEl) return;
+
+  let activeBooks = globalBookingsCache.filter(b => b.status !== 'CANCELLED');
+  if (cockpitFilterMode === 'UNPAID') {
+    activeBooks = activeBooks.filter(b => b.status === 'CONFIRMED' || b.status === 'PENDING');
+  } else if (cockpitFilterMode === 'CHECKED_IN') {
+    activeBooks = activeBooks.filter(b => b.status === 'CHECKED_IN');
+  }
+
+  // Счетчик активных броней
+  const countEl = document.getElementById('cockpit-count-badge');
+  if (countEl) countEl.innerText = activeBooks.length;
+
+  if (activeBooks.length === 0) {
+    listEl.innerHTML = '<div style="color:#64748b; padding:24px; text-align:center; font-size:13px">В данной категории бронирований нет</div>';
+    detailEl.innerHTML = '<div style="color:#c7d2fe; padding:32px; text-align:center; font-size:14px">Выберите бронирование для просмотра деталей</div>';
+    return;
+  }
+
+  // Автоматический выбор первого элемента
+  if (!selectedCockpitBookingId || !activeBooks.some(b => b.id === selectedCockpitBookingId)) {
+    selectedCockpitBookingId = activeBooks[0].id;
+  }
+
+  // Отрисовка списка слева
+  const today = new Date().toISOString().split('T')[0];
+  listEl.innerHTML = activeBooks.map(b => {
+    const isSelected = b.id === selectedCockpitBookingId;
+    const guest = b.guest || globalGuestsCache.find(g => g.id === (b.guestId || b.guest_id || (b.guest && b.guest.id)));
+    const guestName = guest ? `${guest.firstName} ${guest.lastName}` : `Гость #${b.id}`;
+    const initials = guest ? `${guest.firstName[0] || ''}${guest.lastName[0] || ''}` : 'Г';
+    const statusLabel = LABELS.bookingStatuses[b.status] || b.status;
+    const nights = calculateNights(b.checkInDate, b.checkOutDate);
+
+    // Относительные дни
+    let relativeText = `Срок: ${nights} ноч.`;
+    if (b.status === 'CHECKED_IN') {
+      const remaining = calculateNights(today, b.checkOutDate);
+      relativeText = remaining === 0 ? 'Выезд сегодня' : (remaining > 0 ? `Осталось ${remaining} ноч.` : 'Просрочено');
+    } else if (b.checkInDate === today) {
+      relativeText = 'Заезд сегодня';
+    } else if (b.checkInDate > today) {
+      const daysUntil = calculateNights(today, b.checkInDate);
+      relativeText = `Заезд через ${daysUntil} дн.`;
+    }
+
+    return `
+      <div class="cockpit-item ${isSelected ? 'selected' : ''}" onclick="selectCockpitBooking(${b.id})">
+        <div class="cockpit-avatar">${initials}</div>
+        <div class="cockpit-item-info">
+          <div class="cockpit-item-title"># BOOK-${b.id}</div>
+          <div class="cockpit-item-sub">${escapeHtml(guestName)} • ${relativeText}</div>
+        </div>
+        <div class="cockpit-item-status status-${b.status.toLowerCase()}">${statusLabel}</div>
+        <div class="cockpit-item-amount">${formatRub(b.totalPrice)}</div>
+      </div>
+    `;
+  }).join('');
+
+  // Отрисовка правой детальной карточки
+  const selBook = activeBooks.find(b => b.id === selectedCockpitBookingId) || activeBooks[0];
+  if (!selBook) return;
+
+  const selGuest = selBook.guest || globalGuestsCache.find(g => g.id === (selBook.guestId || selBook.guest_id || (selBook.guest && selBook.guest.id)));
+  const selRoom = globalRoomsCache.find(r => r.id === (selBook.roomId || selBook.room_id || (selBook.room && selBook.room.id)));
+  const guestInitials = selGuest ? `${selGuest.firstName[0] || ''}${selGuest.lastName[0] || ''}` : 'ГИ';
+  const nights = calculateNights(selBook.checkInDate, selBook.checkOutDate);
+  const roomPricePerNight = selRoom ? selRoom.pricePerNight : (selBook.totalPrice / (nights || 1));
+  const stayCost = roomPricePerNight * nights;
+  const extraServices = Math.max(0, selBook.totalPrice - stayCost);
+  const statusLabel = LABELS.bookingStatuses[selBook.status] || selBook.status;
+
+  detailEl.innerHTML = `
+    <div class="cockpit-detail-top">
+      <div>
+        <div class="cockpit-tag-row">
+          <span style="font-size:12px; opacity:0.8">Детали бронирования:</span>
+          <span class="cockpit-status-chip">${statusLabel}</span>
+        </div>
+        <div class="cockpit-detail-h1"># BOOK-${selBook.id}</div>
+      </div>
+      <div class="cockpit-detail-brand">
+        <div class="cockpit-brand-pill">
+          <span class="gold-sparkle">⚜️</span> Grand Impérial
+        </div>
+      </div>
+      <div class="cockpit-guest-badge">
+        <div class="cockpit-avatar light">${guestInitials}</div>
+        <div>
+          <div style="font-weight:700; font-size:13.5px">${escapeHtml(selGuest ? `${selGuest.firstName} ${selGuest.lastName}` : 'Гость комплекса')}</div>
+          <div style="font-size:11.5px; opacity:0.85">${selRoom ? `Номер №${selRoom.roomNumber} (${LABELS.types[selRoom.type] || selRoom.type})` : 'Номер не назначен'}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="cockpit-detail-subcards">
+      <div class="cockpit-subcard">
+        <div class="cockpit-subcard-sum">${formatRub(stayCost)} <span class="arrow-up-right">↗</span></div>
+        <div class="cockpit-subcard-label">Тариф номера (${nights} ноч.)</div>
+        <div class="cockpit-subcard-date">${selBook.checkInDate} &rarr; ${selBook.checkOutDate}</div>
+      </div>
+      <div class="cockpit-subcard">
+        <div class="cockpit-subcard-sum">${selRoom ? `№ ${selRoom.roomNumber}` : '—'} <span class="arrow-up-right">↗</span></div>
+        <div class="cockpit-subcard-label">${selRoom ? `${LABELS.types[selRoom.type] || selRoom.type} • ${selRoom.floor} этаж` : 'Категория'}</div>
+        <div class="cockpit-subcard-date">до ${selRoom ? selRoom.maxGuests : 2} гостей</div>
+      </div>
+      <div class="cockpit-subcard">
+        <div class="cockpit-subcard-sum">${formatRub(extraServices)} <span class="arrow-up-right">↗</span></div>
+        <div class="cockpit-subcard-label">СПА, бар и доп. услуги</div>
+        <div class="cockpit-subcard-date">Включено в счёт</div>
+      </div>
+      <div class="cockpit-subcard dashed" onclick="openPaymentWithBooking(${selBook.id})">
+        <div class="cockpit-plus-icon">+</div>
+        <div class="cockpit-subcard-label">Принять оплату</div>
+      </div>
+    </div>
+
+    <div class="cockpit-detail-footer">
+      <div class="cockpit-footer-col">
+        <span class="foot-label">Промежуточный итог</span>
+        <span class="foot-val">${formatRub(selBook.totalPrice)}</span>
+      </div>
+      <div class="cockpit-footer-col">
+        <span class="foot-label">Итого к оплате</span>
+        <span class="foot-val" style="font-size:17px; font-weight:800">${formatRub(selBook.totalPrice)}</span>
+      </div>
+      <div class="cockpit-footer-col">
+        <span class="foot-label">Баланс долга</span>
+        <span class="foot-val" style="color:#bbf7d0">${selBook.status === 'CHECKED_IN' ? '0 ₽ (Оплачено)' : formatRub(selBook.totalPrice)}</span>
+      </div>
+
+      <div class="cockpit-footer-actions">
+        <button class="cockpit-icon-btn" title="Печать счёта (Folio)" onclick="openInvoiceSheet(${selBook.id})">
+          📄
+        </button>
+        <button class="cockpit-icon-btn" title="Календарь дат" onclick="navigateTo('bookings')">
+          📅
+        </button>
+        <button class="cockpit-primary-white-btn" onclick="openInvoiceSheet(${selBook.id})">
+          Открыть счёт / Чек
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+function selectCockpitBooking(id) {
+  selectedCockpitBookingId = id;
+  renderDashboardCockpit();
+}
+
+function setCockpitFilter(mode, btn) {
+  cockpitFilterMode = mode;
+  document.querySelectorAll('.cockpit-tab-pill').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  renderDashboardCockpit();
+}
+
+function openPaymentWithBooking(bookingId) {
+  openPaymentModal();
+  const sel = document.getElementById('pay-booking');
+  if (sel) {
+    sel.value = bookingId;
+  }
+}
+
+function toggleActiveFilters() {
+  const row = document.querySelector('.filter-toolbar-row');
+  if (row) {
+    row.style.display = row.style.display === 'none' ? 'flex' : 'none';
+  }
+}
+
+function filterDashboardContent() {
+  const cat = document.getElementById('dash-filter-category')?.value || '';
+  const st = document.getElementById('dash-filter-status')?.value || '';
+  
+  let filtered = globalRoomsCache;
+  if (cat) filtered = filtered.filter(r => r.type === cat);
+  if (st) filtered = filtered.filter(r => r.status === st);
+  
+  renderFloorCorridors(filtered, currentFloorFilter);
+}
+
+function handleGlobalSearch(query) {
+  const q = (query || '').toLowerCase().trim();
+  if (!q) {
+    renderFloorCorridors(globalRoomsCache, currentFloorFilter);
+    return;
+  }
+  const filtered = globalRoomsCache.filter(r => 
+    r.roomNumber.toLowerCase().includes(q) || 
+    (LABELS.types[r.type] || '').toLowerCase().includes(q) ||
+    (LABELS.roomStatuses[r.status] || '').toLowerCase().includes(q)
+  );
+  renderFloorCorridors(filtered, 'all');
 }
 
 // Фильтрация этажей
