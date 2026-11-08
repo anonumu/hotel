@@ -413,7 +413,7 @@ slides_data = [
     # 1. ТИТУЛ
     {
         "type": "title",
-        "badge": "ВЫПУСКНОЙ ПРОЕКТ • СПЕЦИАЛЬНОСТЬ ИНФОРМАЦИОННЫЕ СИСТЕМЫ",
+        "badge": "ПРОГРАММНЫЙ КОМПЛЕКС • СПЕЦИАЛЬНОСТЬ ИНФОРМАЦИОННЫЕ СИСТЕМЫ",
         "title": "Grand Impérial <span>Hotel PMS</span>",
         "sub": "Комплексная автоматизированная информационная система управления номерным фондом, гостями, тарифами и кассовыми операциями пятизвездочного отеля",
         "student": "Сигналов В. А.",
@@ -764,7 +764,7 @@ GET    /api/v1/reports/**         // Полная финансовая отче�
                 <li>Мгновенный поиск свободных номеров на интерактивной карте этажей;</li>
                 <li>Проведение процедуры <strong>Express Check-In</strong> по существующей брони или без нее;</li>
                 <li>Регистрация паспортных данных нового гостя и его контактов;</li>
-                <li>Прием платежей (наличные, кредитные карты, СБП, банковский перевод);</li>
+                <li>Прием платежей (наличные, банковские карты, банковский перевод);</li>
                 <li>Печать гостевого счета-квитанции (Folio) при выезде постояльца;</li>
                 <li>Оформление выселения (Check-Out) с переводом номера в статус уборки (CLEANING).</li>
               </ul>
@@ -1014,10 +1014,10 @@ public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
                                   | id (PK)        |
     +---------------+             | booking_id(FK) |
     |    TARIFFS    |             | amount         |
-    +---------------+             | payment_method |
-    +---------------+             | status         |
-    | STAFF_SHIFTS  |             +----------------+
-    +---------------+
+    +---------------+             | method         |
+    +---------------+             | paid_at        |
+    | STAFF_SHIFTS  |             | description    |
+    +---------------+             +----------------+
             </div>
           </div>
           <div class="card">
@@ -1179,12 +1179,12 @@ public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
                 <tr><th>Колонка</th><th>Тип данных</th><th>Ограничения</th><th>Описание</th></tr>
               </thead>
               <tbody>
-                <tr><td><code>id</code></td><td>BIGINT</td><td>PRIMARY KEY, AUTO</td><td>ID транзакции</td></tr>
-                <tr><td><code>booking_id</code></td><td>BIGINT</td><td>FOREIGN KEY &rarr; bookings(id)</td><td>Привязанная бронь</td></tr>
+                <tr><td><code>id</code></td><td>BIGINT</td><td>PRIMARY KEY, AUTO</td><td>Уникальный ID транзакции</td></tr>
+                <tr><td><code>booking_id</code></td><td>BIGINT</td><td>FOREIGN KEY &rarr; bookings(id)</td><td>Привязанное бронирование</td></tr>
                 <tr><td><code>amount</code></td><td>DECIMAL(10,2)</td><td>NOT NULL</td><td>Сумма платежа в рублях</td></tr>
-                <tr><td><code>payment_method</code></td><td>VARCHAR(20)</td><td>NOT NULL</td><td>Способ оплаты (Enum)</td></tr>
-                <tr><td><code>payment_date</code></td><td>TIMESTAMP</td><td>NOT NULL</td><td>Время проведения транзакции</td></tr>
-                <tr><td><code>status</code></td><td>VARCHAR(20)</td><td>NOT NULL</td><td>Статус транзакции</td></tr>
+                <tr><td><code>method</code></td><td>VARCHAR(20)</td><td>NOT NULL</td><td>Способ оплаты (Enum: CASH, CARD, TRANSFER)</td></tr>
+                <tr><td><code>paid_at</code></td><td>TIMESTAMP</td><td>NOT NULL</td><td>Дата и время фиксации транзакции</td></tr>
+                <tr><td><code>description</code></td><td>VARCHAR(500)</td><td>NULL</td><td>Назначение платежа / примечание кассира</td></tr>
               </tbody>
             </table>
           </div>
@@ -1192,12 +1192,11 @@ public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
             <div class="card-icon">💳</div>
             <div class="card-title">Способы оплаты (PaymentMethod)</div>
             <div class="card-text">
-              Система поддерживает все стандарты эквайринга пятизвездочного гостиничного бизнеса:
+              В сущности <code>PaymentMethod</code> реализованы реальные каналы расчетов:
               <ul style="margin: 12px 0 0 20px; line-height: 1.8;">
-                <li><code>CASH</code> &mdash; Наличный расчет на стойке регистрации;</li>
-                <li><code>CREDIT_CARD</code> &mdash; Банковские карты (МИР, Visa, MasterCard);</li>
-                <li><code>SBP</code> &mdash; Система быстрых платежей по динамическому QR-коду;</li>
-                <li><code>BANK_TRANSFER</code> &mdash; Безналичный расчет для корпоративных клиентов.</li>
+                <li><code>CASH</code> &mdash; Наличный расчет в кассе отеля на стойке регистрации (Reception);</li>
+                <li><code>CARD</code> &mdash; Банковские карты через POS-терминал (МИР, Visa, MasterCard);</li>
+                <li><code>TRANSFER</code> &mdash; Банковский безналичный перевод для корпоративных клиентов.</li>
               </ul>
               <div style="margin-top:14px; padding:10px; background:rgba(16,185,129,0.1); border-radius:8px; border:1px solid rgba(16,185,129,0.3);">
                 <strong>Баланс счета (Balance Due):</strong> Автоматически рассчитывается как <code>total_price - SUM(amount)</code>. Нулевой баланс означает полное закрытие инвойса.
@@ -1345,7 +1344,7 @@ if (hasConflict) {
             <div class="card-icon">⚡</div>
             <div class="card-title">Изоляция фаззинга и перегрузки базы данных</div>
             <div class="card-text">
-              В рамках дипломного проекта реализован уникальный предохранитель пула транзакций:<br><br>
+              В архитектуре программного комплекса реализован уникальный предохранитель пула транзакций:<br><br>
               <strong>Перехватываемые граничные сценарии:</strong>
               <ul style="margin: 10px 0 0 20px; line-height: 1.8;">
                 <li><strong>Фаззинг числа клиентов:</strong> Попытка ввести в поле более 10 гостей &rarr; изоляция запроса с кодом <code>ERR_MAX_CLIENTS_TEST_OVERFLOW_418</code>;</li>
@@ -1847,17 +1846,17 @@ public ResponseEntity&lt;Guest&gt; checkInGuest(
 {
   "bookingId": 1,
   "amount": 35000.00,
-  "paymentMethod": "CREDIT_CARD"
+  "method": "CARD",
+  "description": "Полная предоплата картой при заезде"
 }
 
 // Response Body (201 Created):
 {
   "id": 1,
-  "bookingId": 1,
   "amount": 35000.00,
-  "paymentMethod": "CREDIT_CARD",
-  "status": "COMPLETED",
-  "paymentDate": "2026-11-08T14:30:00"
+  "method": "CARD",
+  "paidAt": "2026-11-01T14:10:00",
+  "description": "Полная предоплата картой при заезде"
 }
             </div>
           </div>
@@ -1870,16 +1869,23 @@ public ResponseEntity&lt;Guest&gt; checkInGuest(
             <div class="postman-body">
 // Response Body (200 OK):
 {
+  "invoiceNumber": "INV-2026-0001",
+  "issueDate": "2026-11-08",
   "bookingId": 1,
-  "guestName": "Иван Смирнов",
+  "guestFullName": "Иван Смирнов",
+  "guestPassport": "4510 123456",
+  "guestPhone": "+7 (916) 111-22-33",
   "roomNumber": "201",
   "roomType": "SUPERIOR",
-  "pricePerNight": 5000.00,
+  "checkInDate": "2026-11-01",
+  "checkOutDate": "2026-11-08",
   "numberOfNights": 7,
+  "pricePerNight": 5000.00,
+  "roomTotal": 35000.00,
   "totalAmount": 35000.00,
   "paidAmount": 35000.00,
   "balanceDue": 0.00,
-  "status": "PAID"
+  "paymentStatus": "PAID"
 }
             </div>
           </div>
@@ -2073,7 +2079,7 @@ for i, slide in enumerate(slides_data, start=1):
                 <div class="meta-value">{slide['supervisor']}</div>
               </div>
               <div class="meta-col">
-                <div class="meta-label">Год защиты</div>
+                <div class="meta-label">Учебный год</div>
                 <div class="meta-value">{slide['year']}</div>
               </div>
             </div>
@@ -2146,3 +2152,4 @@ with sync_playwright() as p:
 
 file_size_mb = os.path.getsize(pdf_file) / (1024 * 1024)
 print(f"SUCCESS: Generated PDF '{pdf_file}' ({file_size_mb:.2f} MB) with {total_slides} slides.")
+

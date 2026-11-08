@@ -14,3 +14,4 @@ if exist "C:\Users\vlads\.jdks\ms-21.0.10\bin\java.exe" (
 echo Запуск приложения: %JAVA_EXE%
 "%JAVA_EXE%" -jar hotel-backend\target\hotel-backend-1.0.0.jar
 pause
+
