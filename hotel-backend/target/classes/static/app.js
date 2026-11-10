@@ -1108,17 +1108,26 @@ function renderDashboardStaySpline(durations) {
 
 function syncDashboardFloorSelect(rooms) {
   const floorSel = document.getElementById('dash-filter-floor');
-  if (!floorSel) return;
-  const prev = floorSel.value || 'all';
-  const floors = [...new Set(rooms.map(r => r.floor || 1))].sort((a, b) => a - b);
-  const stdFloors = floors.length > 0 ? floors : [1, 2, 3, 4];
-  floorSel.innerHTML = '<option value="all">Все этажи здания</option>' +
-    stdFloors.map(f => `<option value="${f}">${f}-й этаж</option>`).join('');
-  if ([...floorSel.options].some(o => o.value === prev)) {
-    floorSel.value = prev;
-  } else {
-    floorSel.value = 'all';
-    currentFloorFilter = 'all';
+  const prev = currentFloorFilter || (floorSel ? floorSel.value : 'all') || 'all';
+  const roomFloors = (rooms || []).map(r => Number(r.floor) || 1);
+  const stdFloors = [...new Set([1, 2, 3, 4, ...roomFloors])].sort((a, b) => a - b);
+
+  if (floorSel) {
+    floorSel.innerHTML = '<option value="all">Все этажи здания</option>' +
+      stdFloors.map(f => `<option value="${f}">${f}-й этаж</option>`).join('');
+    if ([...floorSel.options].some(o => o.value === String(prev))) {
+      floorSel.value = String(prev);
+      currentFloorFilter = String(prev);
+    } else {
+      floorSel.value = 'all';
+      currentFloorFilter = 'all';
+    }
+  }
+
+  const tabsNav = document.getElementById('floor-tabs-nav');
+  if (tabsNav) {
+    tabsNav.innerHTML = `<button type="button" class="floor-tab-btn ${String(currentFloorFilter) === 'all' ? 'active' : ''}" data-floor="all" onclick="filterFloorView('all')">Все этажи</button>` +
+      stdFloors.map(f => `<button type="button" class="floor-tab-btn ${String(currentFloorFilter) === String(f) ? 'active' : ''}" data-floor="${f}" onclick="filterFloorView(${f})">${f}-й этаж</button>`).join('');
   }
 }
 
@@ -1340,8 +1349,8 @@ function resetDashboardFilters() {
   if (flEl) flEl.value = 'all';
   if (srchEl) srchEl.value = '';
   currentFloorFilter = 'all';
-  document.querySelectorAll('.floor-tab-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.innerText.includes('Все'));
+  document.querySelectorAll('#floor-tabs-nav .floor-tab-btn').forEach(btn => {
+    btn.classList.toggle('active', (btn.dataset.floor || '') === 'all');
   });
   filterDashboardContent();
   notify('Фильтры сводки сброшены');
@@ -1351,12 +1360,13 @@ function filterDashboardContent() {
   const cat = document.getElementById('dash-filter-category')?.value || '';
   const st = document.getElementById('dash-filter-status')?.value || '';
   const period = document.getElementById('dash-filter-period')?.value || 'all';
-  const floorVal = document.getElementById('dash-filter-floor')?.value || 'all';
+  const flEl = document.getElementById('dash-filter-floor');
+  const floorVal = String((flEl && flEl.value) ? flEl.value : (currentFloorFilter || 'all'));
   const query = (document.getElementById('dash-global-search')?.value || '').toLowerCase().trim();
 
   currentFloorFilter = floorVal;
-  document.querySelectorAll('.floor-tab-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.innerText.includes(floorVal === 'all' ? 'Все' : `${floorVal}-й`));
+  document.querySelectorAll('#floor-tabs-nav .floor-tab-btn').forEach(btn => {
+    btn.classList.toggle('active', (btn.dataset.floor || '') === floorVal);
   });
 
   // Считаем реально активные фильтры
@@ -1419,8 +1429,18 @@ function filterDashboardContent() {
 
 // Фильтрация этажей (синхронизируется с селектом в шапке фильтров)
 function filterFloorView(floor) {
+  const targetFloor = (floor === undefined || floor === null || floor === '') ? 'all' : String(floor);
+  currentFloorFilter = targetFloor;
   const flEl = document.getElementById('dash-filter-floor');
-  if (flEl) flEl.value = String(floor);
+  if (flEl) {
+    if (![...flEl.options].some(o => o.value === targetFloor)) {
+      const opt = document.createElement('option');
+      opt.value = targetFloor;
+      opt.textContent = targetFloor === 'all' ? 'Все этажи здания' : `${targetFloor}-й этаж`;
+      flEl.appendChild(opt);
+    }
+    flEl.value = targetFloor;
+  }
   filterDashboardContent();
 }
 

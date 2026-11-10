@@ -371,11 +371,11 @@
         <!-- Панель фильтрации этажей и легенда статусов -->
         <div class="floor-selector-bar">
           <div class="floor-tabs" id="floor-tabs-nav">
-            <button class="floor-tab-btn active" onclick="filterFloorView('all')">Все этажи</button>
-            <button class="floor-tab-btn" onclick="filterFloorView(1)">1-й этаж</button>
-            <button class="floor-tab-btn" onclick="filterFloorView(2)">2-й этаж</button>
-            <button class="floor-tab-btn" onclick="filterFloorView(3)">3-й этаж</button>
-            <button class="floor-tab-btn" onclick="filterFloorView(4)">4-й этаж</button>
+            <button type="button" class="floor-tab-btn active" data-floor="all" onclick="filterFloorView('all')">Все этажи</button>
+            <button type="button" class="floor-tab-btn" data-floor="1" onclick="filterFloorView(1)">1-й этаж</button>
+            <button type="button" class="floor-tab-btn" data-floor="2" onclick="filterFloorView(2)">2-й этаж</button>
+            <button type="button" class="floor-tab-btn" data-floor="3" onclick="filterFloorView(3)">3-й этаж</button>
+            <button type="button" class="floor-tab-btn" data-floor="4" onclick="filterFloorView(4)">4-й этаж</button>
           </div>
 
           <div class="status-legend">

@@ -1253,6 +1253,8 @@ body {
   background: var(--slate-100);
   padding: 4px;
   border-radius: 8px;
+  position: relative;
+  z-index: 2;
 }
 
 .floor-tab-btn {
@@ -1266,6 +1268,15 @@ body {
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.15s;
+}
+
+.floor-tab-btn:focus {
+  outline: none;
+}
+
+.floor-tab-btn:focus-visible {
+  outline: 2px solid var(--indigo-600);
+  outline-offset: 2px;
 }
 
 .floor-tab-btn:hover {
