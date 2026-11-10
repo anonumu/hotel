@@ -1,4 +1,4 @@
-﻿param(
+param(
     [switch]$Rebuild,
     [switch]$CheckOnly
 )
@@ -177,3 +177,4 @@ if ($ExitCode -ne 0) {
     Read-Host 'Нажмите Enter для выхода'
 }
 exit $ExitCode
+

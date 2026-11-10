@@ -59,17 +59,19 @@ public class StaffPerformanceDto {
         private int tasksCompleted;
         private double rating;
         private String shift;
+        private boolean active;
 
         public StaffMemberStat() {
         }
 
-        public StaffMemberStat(Long id, String name, String position, int tasksCompleted, double rating, String shift) {
+        public StaffMemberStat(Long id, String name, String position, int tasksCompleted, double rating, String shift, boolean active) {
             this.id = id;
             this.name = name;
             this.position = position;
             this.tasksCompleted = tasksCompleted;
             this.rating = rating;
             this.shift = shift;
+            this.active = active;
         }
 
         public Long getId() {
@@ -118,6 +120,14 @@ public class StaffPerformanceDto {
 
         public void setShift(String shift) {
             this.shift = shift;
+        }
+
+        public boolean isActive() {
+            return active;
+        }
+
+        public void setActive(boolean active) {
+            this.active = active;
         }
     }
 }

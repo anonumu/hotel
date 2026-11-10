@@ -145,7 +145,8 @@ public class ReportService {
                     s.getPosition().name(),
                     tasks,
                     BigDecimal.valueOf(rating).setScale(1, RoundingMode.HALF_UP).doubleValue(),
-                    shift
+                    shift,
+                    s.isActive()
             ));
         }
 

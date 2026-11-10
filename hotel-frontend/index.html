@@ -570,6 +570,14 @@
             <span>Добавить сотрудника</span>
           </button>
         </div>
+        <div class="floor-selector-bar" style="margin-bottom:18px">
+          <div class="floor-tabs" id="staff-filter-tabs">
+            <button type="button" class="floor-tab-btn active" onclick="filterStaffView('ALL', this)">Все (<span id="staff-count-all">0</span>)</button>
+            <button type="button" class="floor-tab-btn" onclick="filterStaffView('ACTIVE', this)">На работе (<span id="staff-count-active">0</span>)</button>
+            <button type="button" class="floor-tab-btn" onclick="filterStaffView('OFF', this)">Не на работе (<span id="staff-count-off">0</span>)</button>
+          </div>
+          <div style="font-size:12.5px; color:var(--slate-500)">Нажмите на статус сотрудника или кнопку в карточке, чтобы отметить выход на работу или уход со смены</div>
+        </div>
         <div id="staff-grid" class="staff-grid"></div>
       </div>
     </section>
@@ -710,7 +718,7 @@
           <div class="panel-header">
             <div>
               <div class="panel-title">Показатели эффективности персонала</div>
-              <div class="panel-subtitle">Оценки работы и количество завершенных смен</div>
+              <div id="rep-staff-subtitle" class="panel-subtitle">Оценки работы и количество завершенных смен</div>
             </div>
             <button class="btn btn-xs btn-secondary" onclick="navigateTo('staff')">К персоналу &rarr;</button>
           </div>
@@ -1032,6 +1040,13 @@
             <label class="form-label">Дата приема на работу</label>
             <input type="date" id="staff-date" class="form-control">
           </div>
+          <div class="form-group full">
+            <label class="form-label">Текущий статус присутствия</label>
+            <select id="staff-active" class="form-control">
+              <option value="true" selected>На работе (На смене)</option>
+              <option value="false">Не на работе (Выходной)</option>
+            </select>
+          </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" onclick="closeModal('modal-add-staff')">Отмена</button>
@@ -1072,6 +1087,7 @@
         </div>
       </div>
       <div class="modal-footer">
+        <button type="button" id="sch-toggle-btn" class="btn btn-primary" onclick="toggleStaffFromModal()">Переключить статус</button>
         <button type="button" class="btn btn-secondary" onclick="closeModal('modal-staff-shift')">Закрыть</button>
       </div>
     </div>

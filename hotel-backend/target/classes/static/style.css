@@ -1495,6 +1495,17 @@ body {
   border: 1px solid var(--status-repair-border);
 }
 
+button.door-hanger-card {
+  cursor: pointer;
+  font-family: inherit;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+button.door-hanger-card:hover {
+  opacity: 0.85;
+  transform: translateY(-1px);
+}
+
 .door-price-tag {
   color: var(--slate-400);
   font-size: 11px;

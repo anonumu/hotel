@@ -14,6 +14,8 @@ const API_BASE = (window.location.protocol === 'http:' || window.location.protoc
 let isApiOnline = false;
 let globalPaymentsCache = [];
 let globalStaffCache = [];
+let staffFilterMode = 'ALL';
+let currentScheduleStaffId = null;
 
 // Локальное реактивное хранилище для автономной работы и демо-режима
 const store = {
@@ -41,7 +43,7 @@ const store = {
     { id: 1, firstName: 'Михаил', lastName: 'Орлов', position: 'MANAGER', email: 'm.orlov@hotel.ru', phone: '+7 (900) 100-01-01', hireDate: '2023-01-15', active: true },
     { id: 2, firstName: 'Екатерина', lastName: 'Волкова', position: 'RECEPTIONIST', email: 'e.volkova@hotel.ru', phone: '+7 (900) 100-01-02', hireDate: '2023-06-01', active: true },
     { id: 3, firstName: 'Ольга', lastName: 'Соколова', position: 'MAID', email: 'o.sokolova@hotel.ru', phone: '+7 (900) 100-01-03', hireDate: '2023-09-10', active: true },
-    { id: 4, firstName: 'Дмитрий', lastName: 'Морозов', position: 'ACCOUNTANT', email: 'd.morozov@hotel.ru', phone: '+7 (900) 100-01-04', hireDate: '2022-11-01', active: true },
+    { id: 4, firstName: 'Дмитрий', lastName: 'Морозов', position: 'ACCOUNTANT', email: 'd.morozov@hotel.ru', phone: '+7 (900) 100-01-04', hireDate: '2022-11-01', active: false },
     { id: 5, firstName: 'Сергей', lastName: 'Васильев', position: 'ADMIN', email: 'admin@hotel.ru', phone: '+7 (900) 100-01-05', hireDate: '2022-01-10', active: true }
   ],
   tariffs: [
@@ -656,7 +658,7 @@ function mockApi(endpoint, options = {}) {
         email: email,
         phone: (data.phone || '').trim(),
         hireDate: data.hireDate || new Date().toISOString().split('T')[0],
-        active: true
+        active: data.active !== undefined ? Boolean(data.active) : true
       };
       store.staff.push(s);
       return s;
@@ -665,6 +667,10 @@ function mockApi(endpoint, options = {}) {
     if (match) {
       const id = parseInt(match[1]);
       const member = store.staff.find(s => s.id === id);
+      if (endpoint.endsWith('/status') && method === 'PATCH') {
+        if (member) member.active = Boolean(data.active);
+        return member;
+      }
       if (endpoint.endsWith('/schedule')) {
         return {
           staffId: id,
@@ -673,7 +679,7 @@ function mockApi(endpoint, options = {}) {
           shiftHours: '08:00 — 20:00',
           workSchedule: '2/2 (Дневная смена)',
           assignedFloor: member && member.position === 'MAID' ? '1-й и 2-й этажи' : 'Главный холл / Ресепшн',
-          status: 'На смене'
+          status: member && member.active ? 'На смене' : 'Выходной'
         };
       }
       if (method === 'DELETE') {
@@ -2434,40 +2440,119 @@ async function checkOutGuest(id) {
 // ==========================================================================
 // 5. ПЕРСОНАЛ
 // ==========================================================================
-async function renderStaff() {
-  const staff = await api('/staff');
-  if (!staff) return;
-  updateNavCounts({ staff: staff.length });
+function filterStaffView(mode, btn) {
+  staffFilterMode = mode;
+  document.querySelectorAll('#staff-filter-tabs .floor-tab-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  renderStaffCards(globalStaffCache);
+}
+
+function renderStaffCards(staff) {
+  const allCount = staff.length;
+  const activeCount = staff.filter(s => s.active).length;
+  const offCount = allCount - activeCount;
+
+  const cAll = document.getElementById('staff-count-all');
+  const cAct = document.getElementById('staff-count-active');
+  const cOff = document.getElementById('staff-count-off');
+  if (cAll) cAll.innerText = allCount;
+  if (cAct) cAct.innerText = activeCount;
+  if (cOff) cOff.innerText = offCount;
 
   const grid = document.getElementById('staff-grid');
   if (!grid) return;
 
-  grid.innerHTML = staff.map(s => `
+  const filtered = staff.filter(s => {
+    if (staffFilterMode === 'ACTIVE') return Boolean(s.active);
+    if (staffFilterMode === 'OFF') return !s.active;
+    return true;
+  });
+
+  if (filtered.length === 0) {
+    grid.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:32px; color:#64748b">В выбранном фильтре сотрудники отсутствуют</div>';
+    return;
+  }
+
+  grid.innerHTML = filtered.map(s => `
     <div class="staff-card">
       <div class="staff-top">
         <div>
           <div class="staff-name">${escapeHtml(s.firstName)} ${escapeHtml(s.lastName)}</div>
           <div class="staff-pos">${LABELS.positions[s.position] || s.position}</div>
         </div>
-        <span class="door-hanger-card ${s.active ? 'AVAILABLE' : 'OUT_OF_ORDER'}" style="margin:0; padding:2px 8px">
-          ${s.active ? 'В штате' : 'Отпуск'}
-        </span>
+        <button type="button"
+                class="door-hanger-card ${s.active ? 'AVAILABLE' : 'OUT_OF_ORDER'}"
+                style="margin:0; padding:4px 10px"
+                title="Нажмите, чтобы переключить рабочий статус"
+                onclick="toggleStaffStatus(${s.id}, ${!s.active})">
+          ${s.active ? 'На работе' : 'Не на работе'}
+        </button>
       </div>
       <div class="staff-details">
         <div>Телефон: <strong>${escapeHtml(s.phone)}</strong></div>
         <div>Email: <strong>${escapeHtml(s.email)}</strong></div>
         <div>Принят: <span>${s.hireDate || '2023-01-15'}</span></div>
       </div>
-      <div style="display:flex; gap:8px">
-        <button class="btn btn-sm btn-secondary" style="flex:1" onclick="openStaffSchedule(${s.id})">
-          График смен
+      <div style="display:flex; gap:6px; align-items:center">
+        <button class="btn btn-sm ${s.active ? 'btn-brass' : 'btn-primary'}" style="flex:1; white-space:nowrap" onclick="toggleStaffStatus(${s.id}, ${!s.active})">
+          ${s.active ? 'Выходной' : 'На работу'}
         </button>
-        <button class="btn btn-sm btn-danger" onclick="removeStaff(${s.id})">
+        <button class="btn btn-sm btn-secondary" style="white-space:nowrap" onclick="openStaffSchedule(${s.id})">
+          График
+        </button>
+        <button class="btn btn-sm btn-danger" style="white-space:nowrap" onclick="removeStaff(${s.id})">
           Удалить
         </button>
       </div>
     </div>
   `).join('');
+}
+
+async function renderStaff() {
+  const staff = await api('/staff');
+  if (!staff) return;
+  globalStaffCache = staff;
+  updateNavCounts({ staff: staff.length });
+  renderStaffCards(staff);
+}
+
+async function toggleStaffStatus(id, targetActive) {
+  try {
+    const updated = await api(`/staff/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ active: Boolean(targetActive) })
+    });
+    const isNowActive = updated ? Boolean(updated.active) : Boolean(targetActive);
+    notify(isNowActive ? 'Сотрудник отмечен: На работе (На смене)' : 'Сотрудник отмечен: Не на работе (Выходной)');
+
+    if (currentScheduleStaffId === id) {
+      updateShiftModalStatusUI(id, isNowActive);
+    }
+    await refreshAllViews();
+  } catch (err) {
+    if (!err.isStress) notify(err.message, 'err');
+  }
+}
+
+function updateShiftModalStatusUI(id, isAtWork) {
+  const statusEl = document.getElementById('sch-status');
+  if (statusEl) {
+    statusEl.innerText = isAtWork ? 'На работе (На смене)' : 'Не на работе (Выходной)';
+    statusEl.style.color = isAtWork ? '#059669' : '#d97706';
+  }
+  const toggleBtn = document.getElementById('sch-toggle-btn');
+  if (toggleBtn) {
+    toggleBtn.innerText = isAtWork ? 'Отметить: Не на работе' : 'Отметить: На работе';
+    toggleBtn.className = `btn ${isAtWork ? 'btn-brass' : 'btn-primary'}`;
+    toggleBtn.dataset.nextActive = String(!isAtWork);
+  }
+}
+
+function toggleStaffFromModal() {
+  if (!currentScheduleStaffId) return;
+  const toggleBtn = document.getElementById('sch-toggle-btn');
+  const nextActive = toggleBtn?.dataset.nextActive === 'true';
+  toggleStaffStatus(currentScheduleStaffId, nextActive);
 }
 
 // ==========================================================================
@@ -2746,6 +2831,10 @@ async function renderReports() {
   }
 
   const staffList = (staffRep && (staffRep.staffStats || staffRep.stats || staffRep.staffMemberStats)) || [];
+  const repStaffSub = document.getElementById('rep-staff-subtitle');
+  if (repStaffSub && staffRep) {
+    repStaffSub.innerText = `Сейчас на работе: ${staffRep.activeStaff ?? 0} из ${staffRep.totalStaff ?? staffList.length} • Средняя оценка: ${staffRep.averageRating ?? '—'}`;
+  }
   const list = document.getElementById('rep-staff-kpi');
   if (list) {
     if (staffList.length === 0) {
@@ -2754,7 +2843,10 @@ async function renderReports() {
       list.innerHTML = staffList.map(s => `
         <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--slate-100)">
           <div>
-            <div style="font-weight:700; color:var(--text-main); font-size:13px">${escapeHtml(s.name)}</div>
+            <div style="display:flex; align-items:center; gap:8px">
+              <span style="font-weight:700; color:var(--text-main); font-size:13px">${escapeHtml(s.name)}</span>
+              ${s.active !== undefined ? `<span class="door-hanger-card ${s.active ? 'AVAILABLE' : 'OUT_OF_ORDER'}" style="padding:1px 6px; font-size:10px">${s.active ? 'На работе' : 'Выходной'}</span>` : ''}
+            </div>
             <div style="font-size:11.5px; color:var(--text-muted)">${LABELS.positions[s.position] || s.position} • ${s.shift || 'Смена'}</div>
           </div>
           <div style="text-align:right">
@@ -3105,6 +3197,7 @@ async function submitStaff(e) {
 
   clearModalAlert('modal-add-staff');
 
+  const activeSelect = document.getElementById('staff-active');
   const member = {
     firstName: document.getElementById('staff-fn').value.trim(),
     lastName: document.getElementById('staff-ln').value.trim(),
@@ -3112,7 +3205,7 @@ async function submitStaff(e) {
     email: document.getElementById('staff-em').value.trim(),
     phone: document.getElementById('staff-ph').value.trim(),
     hireDate: document.getElementById('staff-date').value || new Date().toISOString().split('T')[0],
-    active: true
+    active: activeSelect ? activeSelect.value !== 'false' : true
   };
 
   if (
@@ -3173,12 +3266,15 @@ async function openStaffSchedule(id) {
   const sch = await api(`/staff/${id}/schedule`);
   if (!sch) return;
 
+  currentScheduleStaffId = id;
+  const isAtWork = sch.status === 'На смене';
+
   document.getElementById('sch-name').innerText = sch.fullName;
   document.getElementById('sch-pos').innerText = LABELS.positions[sch.position] || sch.position;
   document.getElementById('sch-hours').innerText = sch.shiftHours;
   document.getElementById('sch-plan').innerText = sch.workSchedule;
   document.getElementById('sch-zone').innerText = sch.assignedFloor;
-  document.getElementById('sch-status').innerText = sch.status;
+  updateShiftModalStatusUI(id, isAtWork);
 
   openModal('modal-staff-shift');
 }

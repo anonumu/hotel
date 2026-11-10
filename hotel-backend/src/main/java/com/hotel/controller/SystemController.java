@@ -79,7 +79,7 @@ public class SystemController {
                 new Staff("Михаил", "Орлов", StaffPosition.MANAGER, "m.orlov@hotel.com", "+7 (900) 100-01-01", LocalDate.of(2023, 1, 15), true),
                 new Staff("Екатерина", "Волкова", StaffPosition.RECEPTIONIST, "e.volkova@hotel.com", "+7 (900) 100-01-02", LocalDate.of(2023, 6, 1), true),
                 new Staff("Ольга", "Соколова", StaffPosition.MAID, "o.sokolova@hotel.com", "+7 (900) 100-01-03", LocalDate.of(2023, 9, 10), true),
-                new Staff("Дмитрий", "Морозов", StaffPosition.ACCOUNTANT, "d.morozov@hotel.com", "+7 (900) 100-01-04", LocalDate.of(2022, 11, 1), true),
+                new Staff("Дмитрий", "Морозов", StaffPosition.ACCOUNTANT, "d.morozov@hotel.com", "+7 (900) 100-01-04", LocalDate.of(2022, 11, 1), false),
                 new Staff("Сергей", "Васильев", StaffPosition.ADMIN, "admin@hotel.com", "+7 (900) 100-01-05", LocalDate.of(2022, 1, 10), true)
         ));
 

@@ -1,6 +1,7 @@
 package com.hotel.controller;
 
 import com.hotel.dto.StaffDto;
+import com.hotel.exception.BusinessLogicException;
 import com.hotel.model.Staff;
 import com.hotel.service.StaffService;
 import org.springframework.http.HttpStatus;
@@ -9,6 +10,7 @@ import org.springframework.web.bind.annotation.*;
 
 import javax.validation.Valid;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/staff")
@@ -43,6 +45,27 @@ public class StaffController {
     @PutMapping("/{id}")
     public ResponseEntity<Staff> updateStaff(@PathVariable Long id, @Valid @RequestBody StaffDto dto) {
         return ResponseEntity.ok(staffService.updateStaff(id, dto));
+    }
+
+    // Переключение рабочего статуса сотрудника (На работе / Не на работе)
+    @PatchMapping("/{id}/status")
+    public ResponseEntity<Staff> updateStaffStatus(
+            @PathVariable Long id,
+            @RequestParam(required = false) Boolean active,
+            @RequestBody(required = false) Map<String, Object> body) {
+        Boolean targetStatus = active;
+        if (targetStatus == null && body != null && body.containsKey("active")) {
+            Object val = body.get("active");
+            if (val instanceof Boolean) {
+                targetStatus = (Boolean) val;
+            } else if (val instanceof String) {
+                targetStatus = Boolean.parseBoolean((String) val);
+            }
+        }
+        if (targetStatus == null) {
+            throw new BusinessLogicException("Укажите рабочий статус сотрудника (active: true или false)");
+        }
+        return ResponseEntity.ok(staffService.updateStaffActiveStatus(id, targetStatus));
     }
 
     // Удаление сотрудника

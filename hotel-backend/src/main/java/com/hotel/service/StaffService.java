@@ -61,6 +61,11 @@ public class StaffService {
     public Staff updateStaff(Long id, StaffDto dto) {
         Staff staff = getStaffById(id);
 
+        SecuritySanitizer.assertSafeText(dto.getFirstName(), "Имя");
+        SecuritySanitizer.assertSafeText(dto.getLastName(), "Фамилия");
+        SecuritySanitizer.assertSafeText(dto.getEmail(), "Email");
+        SecuritySanitizer.assertSafeText(dto.getPhone(), "Телефон");
+
         if (!staff.getEmail().equals(dto.getEmail())) {
             staffRepository.findByEmail(dto.getEmail()).ifPresent(s -> {
                 throw new BusinessLogicException("Email " + dto.getEmail() + " уже занят другим сотрудником");
@@ -75,6 +80,13 @@ public class StaffService {
         staff.setHireDate(dto.getHireDate());
         staff.setActive(dto.isActive());
 
+        return staffRepository.save(staff);
+    }
+
+    // Отметка присутствия сотрудника (на работе / не на работе)
+    public Staff updateStaffActiveStatus(Long id, boolean active) {
+        Staff staff = getStaffById(id);
+        staff.setActive(active);
         return staffRepository.save(staff);
     }
 

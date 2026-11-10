@@ -22,7 +22,7 @@ INSERT INTO staff (first_name, last_name, position, email, phone, hire_date, is_
 ('Михаил', 'Орлов', 'MANAGER', 'm.orlov@hotel.com', '+7 (900) 100-01-01', '2023-01-15', true),
 ('Екатерина', 'Волкова', 'RECEPTIONIST', 'e.volkova@hotel.com', '+7 (900) 100-01-02', '2023-06-01', true),
 ('Ольга', 'Соколова', 'MAID', 'o.sokolova@hotel.com', '+7 (900) 100-01-03', '2023-09-10', true),
-('Дмитрий', 'Морозов', 'ACCOUNTANT', 'd.morozov@hotel.com', '+7 (900) 100-01-04', '2022-11-01', true),
+('Дмитрий', 'Морозов', 'ACCOUNTANT', 'd.morozov@hotel.com', '+7 (900) 100-01-04', '2022-11-01', false),
 ('Сергей', 'Васильев', 'ADMIN', 'admin@hotel.com', '+7 (900) 100-01-05', '2022-01-10', true);
 
 -- 4. Тарифы
