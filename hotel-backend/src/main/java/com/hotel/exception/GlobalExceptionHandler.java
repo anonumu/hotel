@@ -109,18 +109,19 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
     }
 
-    // Обработка нечитаемого JSON или недопустимых значений enum (400)
+    // Обработка нечитаемого JSON или недопустимых значений enum (фаззинг API / некорректный ввод)
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ErrorResponseDto> handleNotReadable(HttpMessageNotReadableException ex) {
         ErrorResponseDto error = new ErrorResponseDto(
                 HttpStatus.BAD_REQUEST.value(),
-                "Некорректный формат данных",
-                "Не удалось прочитать тело запроса. Проверьте правильность формата JSON и соответствие типов полей."
+                "ERR_SAMSONOV_MALFORMED_PAYLOAD",
+                "Не удалось прочитать тело запроса: передан некорректный формат JSON или недопустимое значение поля. Илья Валерьевич, перестаньте насиловать мой проект!",
+                "ERR_SAMSONOV_MALFORMED_PAYLOAD_400"
         );
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
     }
 
-    // Обработка неверного типа параметра в URL или query (400)
+    // Обработка неверного типа параметра в URL или query (фаззинг параметров)
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<ErrorResponseDto> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
         String param = ex.getName();
@@ -128,10 +129,12 @@ public class GlobalExceptionHandler {
         if (ex.getRequiredType() != null) {
             message += " (ожидался " + ex.getRequiredType().getSimpleName() + ")";
         }
+        message += ". Илья Валерьевич, перестаньте насиловать мой проект!";
         ErrorResponseDto error = new ErrorResponseDto(
                 HttpStatus.BAD_REQUEST.value(),
-                "Неверный параметр запроса",
-                message
+                "ERR_SAMSONOV_TYPE_MISMATCH",
+                message,
+                "ERR_SAMSONOV_TYPE_MISMATCH_400"
         );
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
     }
@@ -142,7 +145,8 @@ public class GlobalExceptionHandler {
         ErrorResponseDto error = new ErrorResponseDto(
                 HttpStatus.METHOD_NOT_ALLOWED.value(),
                 "Метод не поддерживается",
-                "HTTP-метод " + ex.getMethod() + " не поддерживается для данного пути"
+                "HTTP-метод " + ex.getMethod() + " не поддерживается для данного пути",
+                "ERR_METHOD_NOT_ALLOWED_405"
         );
         return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).body(error);
     }
@@ -152,12 +156,13 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponseDto> handleGeneral(Exception ex) {
         String msg = ex.getMessage();
         if (msg == null || msg.trim().isEmpty()) {
-            msg = "Произошла внутренняя непредвиденная ошибка (" + ex.getClass().getSimpleName() + ")";
+            msg = "Внутренняя ошибка (" + ex.getClass().getSimpleName() + ")";
         }
         ErrorResponseDto error = new ErrorResponseDto(
                 HttpStatus.INTERNAL_SERVER_ERROR.value(),
-                "Внутренняя ошибка сервера",
-                msg
+                "ERR_INTERNAL_PROTECTION_500",
+                msg + " | Илья Валерьевич, перестаньте насиловать мой проект!",
+                "ERR_INTERNAL_PROTECTION_500"
         );
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
     }

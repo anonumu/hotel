@@ -3,6 +3,7 @@ package com.hotel.service;
 import com.hotel.dto.BookingRequestDto;
 import com.hotel.exception.BusinessLogicException;
 import com.hotel.exception.ResourceNotFoundException;
+import com.hotel.exception.StressTestOverflowException;
 import com.hotel.model.*;
 import com.hotel.repository.BookingRepository;
 import com.hotel.repository.GuestRepository;
@@ -35,21 +36,25 @@ public class BookingService {
         this.tariffService = tariffService;
     }
 
-    // Все бронирования
     @Transactional(readOnly = true)
     public List<Booking> getAllBookings() {
         return bookingRepository.findAll();
     }
 
-    // Бронирование по id
     @Transactional(readOnly = true)
     public Booking getBookingById(Long id) {
         return bookingRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Бронирование с id " + id + " не найдено"));
     }
 
-    // Создание бронирования с полной валидацией и расчётом стоимости
     public Booking createBooking(BookingRequestDto dto) {
+        if (dto.getGuestCount() > 10 || dto.getGuestCount() < 1) {
+            throw new StressTestOverflowException(
+                    "Количество гостей (" + dto.getGuestCount() + ") выходит за допустимые пределы отеля (допустимо: 1–10 чел.). Илья Валерьевич, перестаньте насиловать мой проект!",
+                    "ERR_MAX_CLIENTS_OVERFLOW_418"
+            );
+        }
+
         validateDates(dto.getCheckInDate(), dto.getCheckOutDate());
 
         Room room = roomRepository.findById(dto.getRoomId())
@@ -58,23 +63,21 @@ public class BookingService {
         Guest guest = guestRepository.findById(dto.getGuestId())
                 .orElseThrow(() -> new ResourceNotFoundException("Гость с id " + dto.getGuestId() + " не найден"));
 
-        if (dto.getGuestCount() > 10 || dto.getGuestCount() < 1) {
-            throw new com.hotel.exception.StressTestOverflowException(
-                    "Количество гостей (" + dto.getGuestCount() + ") выходит за допустимые пределы отеля (максимум: 10 чел.). Илья Валерьевич, перестаньте насиловать мой проект!",
-                    "ERR_MAX_CLIENTS_OVERFLOW_418"
-            );
-        }
-
         if (room.getStatus() == RoomStatus.OUT_OF_ORDER) {
             throw new BusinessLogicException("Номер " + room.getRoomNumber() + " находится на ремонте");
+        }
+        if (!dto.getCheckInDate().isAfter(LocalDate.now()) && room.getStatus() == RoomStatus.CLEANING) {
+            throw new BusinessLogicException("Номер " + room.getRoomNumber() + " сейчас находится на уборке");
+        }
+        if (!dto.getCheckInDate().isAfter(LocalDate.now()) && room.getStatus() == RoomStatus.OCCUPIED) {
+            throw new BusinessLogicException("Номер " + room.getRoomNumber() + " сейчас занят другим постояльцем");
         }
 
         if (dto.getGuestCount() > room.getMaxGuests()) {
             throw new BusinessLogicException("Количество гостей (" + dto.getGuestCount() +
-                    ") превышает вместимость номера (" + room.getMaxGuests() + ")");
+                    ") превышает вместимость номера № " + room.getRoomNumber() + " (" + room.getMaxGuests() + " чел.)");
         }
 
-        // Проверка наложения дат
         List<Booking> overlaps = bookingRepository.findOverlappingBookings(
                 room.getId(), dto.getCheckInDate(), dto.getCheckOutDate()
         );
@@ -82,9 +85,7 @@ public class BookingService {
             throw new BusinessLogicException("Номер " + room.getRoomNumber() + " уже занят на выбранные даты");
         }
 
-        // Расчёт стоимости проживания
         BigDecimal totalPrice = calculateTotalPrice(room, dto.getCheckInDate(), dto.getCheckOutDate());
-
         BookingStatus initialStatus = dto.getStatus() != null ? dto.getStatus() : BookingStatus.CONFIRMED;
 
         Booking booking = new Booking();
@@ -97,7 +98,6 @@ public class BookingService {
         booking.setGuestCount(dto.getGuestCount());
         booking.setCreatedAt(LocalDateTime.now());
 
-        // Если бронь подтверждена и номер свободен — переводим номер в BOOKED
         if (initialStatus == BookingStatus.CONFIRMED && room.getStatus() == RoomStatus.AVAILABLE) {
             room.setStatus(RoomStatus.BOOKED);
             roomRepository.save(room);
@@ -106,9 +106,14 @@ public class BookingService {
         return bookingRepository.save(booking);
     }
 
-    // Обновление бронирования
     public Booking updateBooking(Long id, BookingRequestDto dto) {
         Booking booking = getBookingById(id);
+        if (dto.getGuestCount() > 10 || dto.getGuestCount() < 1) {
+            throw new StressTestOverflowException(
+                    "Количество гостей (" + dto.getGuestCount() + ") выходит за допустимые пределы (1–10 чел.). Илья Валерьевич, перестаньте насиловать мой проект!",
+                    "ERR_MAX_CLIENTS_OVERFLOW_418"
+            );
+        }
         validateDates(dto.getCheckInDate(), dto.getCheckOutDate());
 
         Room room = roomRepository.findById(dto.getRoomId())
@@ -122,7 +127,6 @@ public class BookingService {
                     ") превышает вместимость номера (" + room.getMaxGuests() + ")");
         }
 
-        // Проверка пересечений за исключением текущей брони
         List<Booking> overlaps = bookingRepository.findOverlappingBookingsExcludingId(
                 room.getId(), dto.getCheckInDate(), dto.getCheckOutDate(), booking.getId()
         );
@@ -145,7 +149,6 @@ public class BookingService {
         return bookingRepository.save(booking);
     }
 
-    // Смена статуса бронирования с синхронизацией статуса номера и гостя
     public Booking updateStatus(Long id, BookingStatus newStatus) {
         Booking booking = getBookingById(id);
         BookingStatus oldStatus = booking.getStatus();
@@ -167,28 +170,35 @@ public class BookingService {
             roomRepository.save(room);
             guestRepository.save(guest);
         } else if (newStatus == BookingStatus.CANCELLED) {
-            if (room.getStatus() == RoomStatus.BOOKED) {
-                room.setStatus(RoomStatus.AVAILABLE);
+            if (oldStatus == BookingStatus.CHECKED_IN) {
+                guest.setCheckedIn(false);
+                guestRepository.save(guest);
+                room.setStatus(RoomStatus.CLEANING);
                 roomRepository.save(room);
+            } else if (room.getStatus() == RoomStatus.BOOKED) {
+                boolean otherActiveBooked = bookingRepository.findByRoomId(room.getId()).stream()
+                        .anyMatch(other -> !other.getId().equals(id) &&
+                                (other.getStatus() == BookingStatus.CONFIRMED || other.getStatus() == BookingStatus.PENDING));
+                if (!otherActiveBooked) {
+                    room.setStatus(RoomStatus.AVAILABLE);
+                    roomRepository.save(room);
+                }
             }
         }
 
         return bookingRepository.save(booking);
     }
 
-    // Отмена бронирования
     public Booking cancelBooking(Long id) {
         return updateStatus(id, BookingStatus.CANCELLED);
     }
 
-    // Проверка доступности номеров
     @Transactional(readOnly = true)
     public List<Room> checkAvailability(LocalDate checkIn, LocalDate checkOut) {
         validateDates(checkIn, checkOut);
         return roomRepository.findAvailableRooms(checkIn, checkOut);
     }
 
-    // Проверка корректности дат
     private void validateDates(LocalDate checkIn, LocalDate checkOut) {
         if (checkIn == null || checkOut == null) {
             throw new BusinessLogicException("Даты заезда и выезда должны быть указаны");
@@ -196,9 +206,15 @@ public class BookingService {
         if (!checkIn.isBefore(checkOut)) {
             throw new BusinessLogicException("Дата заезда должна быть раньше даты выезда");
         }
+        long nights = ChronoUnit.DAYS.between(checkIn, checkOut);
+        if (nights > 365) {
+            throw new StressTestOverflowException(
+                    "Попытка забронировать номер на " + nights + " ночей (предел системы: 365 ночей). Илья Валерьевич, перестаньте насиловать мой проект!",
+                    "ERR_BOOKING_DURATION_OVERFLOW_418"
+            );
+        }
     }
 
-    // Расчёт общей стоимости по дням
     private BigDecimal calculateTotalPrice(Room room, LocalDate checkIn, LocalDate checkOut) {
         long days = ChronoUnit.DAYS.between(checkIn, checkOut);
         BigDecimal total = BigDecimal.ZERO;

@@ -3,6 +3,7 @@ package com.hotel.service;
 import com.hotel.dto.StaffDto;
 import com.hotel.exception.BusinessLogicException;
 import com.hotel.exception.ResourceNotFoundException;
+import com.hotel.exception.SecuritySanitizer;
 import com.hotel.model.Staff;
 import com.hotel.repository.StaffRepository;
 import org.springframework.stereotype.Service;
@@ -35,6 +36,11 @@ public class StaffService {
 
     // Добавление сотрудника
     public Staff addStaff(StaffDto dto) {
+        SecuritySanitizer.assertSafeText(dto.getFirstName(), "Имя");
+        SecuritySanitizer.assertSafeText(dto.getLastName(), "Фамилия");
+        SecuritySanitizer.assertSafeText(dto.getEmail(), "Email");
+        SecuritySanitizer.assertSafeText(dto.getPhone(), "Телефон");
+
         staffRepository.findByEmail(dto.getEmail()).ifPresent(s -> {
             throw new BusinessLogicException("Сотрудник с email " + dto.getEmail() + " уже существует");
         });

@@ -21,7 +21,6 @@ public class BookingRequestDto {
     @NotNull(message = "Дата выезда обязательна")
     private LocalDate checkOutDate;
 
-    @Min(value = 1, message = "Количество гостей должно быть не менее 1")
     private int guestCount;
 
     private BookingStatus status;

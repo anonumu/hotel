@@ -21,8 +21,10 @@ com\hotel\dto\ErrorResponseDto.class
 com\hotel\config\SecurityConfig.class
 com\hotel\controller\ReportController.class
 com\hotel\dto\GuestsReportDto.class
+com\hotel\config\MutationRateLimitFilter.class
 com\hotel\dto\OccupancyReportDto.class
 com\hotel\repository\TariffRepository.class
+com\hotel\exception\SecuritySanitizer.class
 com\hotel\service\PaymentService.class
 com\hotel\service\BookingService.class
 com\hotel\controller\RoomController.class
@@ -39,6 +41,7 @@ com\hotel\model\StaffPosition.class
 com\hotel\dto\BookingRequestDto.class
 com\hotel\dto\InvoiceDto.class
 com\hotel\model\Booking.class
+com\hotel\controller\SystemController.class
 com\hotel\model\RoomType.class
 com\hotel\model\Guest.class
 com\hotel\HotelApplication.class

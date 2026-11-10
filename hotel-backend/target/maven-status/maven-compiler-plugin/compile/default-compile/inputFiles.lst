@@ -17,6 +17,7 @@ D:\Favorites\Самсонов проект\hotel-backend\src\main\java\com\hotel
 D:\Favorites\Самсонов проект\hotel-backend\src\main\java\com\hotel\controller\TariffController.java
 D:\Favorites\Самсонов проект\hotel-backend\src\main\java\com\hotel\service\BookingService.java
 D:\Favorites\Самсонов проект\hotel-backend\src\main\java\com\hotel\controller\GuestController.java
+D:\Favorites\Самсонов проект\hotel-backend\src\main\java\com\hotel\controller\SystemController.java
 D:\Favorites\Самсонов проект\hotel-backend\src\main\java\com\hotel\exception\StressTestOverflowException.java
 D:\Favorites\Самсонов проект\hotel-backend\src\main\java\com\hotel\controller\InvoiceController.java
 D:\Favorites\Самсонов проект\hotel-backend\src\main\java\com\hotel\controller\PaymentController.java
@@ -24,6 +25,7 @@ D:\Favorites\Самсонов проект\hotel-backend\src\main\java\com\hotel
 D:\Favorites\Самсонов проект\hotel-backend\src\main\java\com\hotel\model\Room.java
 D:\Favorites\Самсонов проект\hotel-backend\src\main\java\com\hotel\model\PaymentMethod.java
 D:\Favorites\Самсонов проект\hotel-backend\src\main\java\com\hotel\dto\RoomStatusDto.java
+D:\Favorites\Самсонов проект\hotel-backend\src\main\java\com\hotel\exception\SecuritySanitizer.java
 D:\Favorites\Самсонов проект\hotel-backend\src\main\java\com\hotel\model\Payment.java
 D:\Favorites\Самсонов проект\hotel-backend\src\main\java\com\hotel\model\RoomStatus.java
 D:\Favorites\Самсонов проект\hotel-backend\src\main\java\com\hotel\config\SecurityConfig.java
@@ -39,6 +41,7 @@ D:\Favorites\Самсонов проект\hotel-backend\src\main\java\com\hotel
 D:\Favorites\Самсонов проект\hotel-backend\src\main\java\com\hotel\controller\BookingController.java
 D:\Favorites\Самсонов проект\hotel-backend\src\main\java\com\hotel\service\ReportService.java
 D:\Favorites\Самсонов проект\hotel-backend\src\main\java\com\hotel\dto\TariffDto.java
+D:\Favorites\Самсонов проект\hotel-backend\src\main\java\com\hotel\config\MutationRateLimitFilter.java
 D:\Favorites\Самсонов проект\hotel-backend\src\main\java\com\hotel\repository\GuestRepository.java
 D:\Favorites\Самсонов проект\hotel-backend\src\main\java\com\hotel\dto\RoomDto.java
 D:\Favorites\Самсонов проект\hotel-backend\src\main\java\com\hotel\dto\StaffPerformanceDto.java

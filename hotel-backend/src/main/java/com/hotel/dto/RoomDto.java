@@ -20,14 +20,11 @@ public class RoomDto {
 
     private RoomStatus status;
 
-    @Min(value = 1, message = "Этаж должен быть не менее 1")
     private int floor;
 
     @NotNull(message = "Цена за сутки обязательна")
-    @Min(value = 0, message = "Цена не может быть отрицательной")
     private BigDecimal pricePerNight;
 
-    @Min(value = 1, message = "Вместимость должна быть не менее 1 гостя")
     private int maxGuests;
 
     private String description;

@@ -3,6 +3,8 @@ package com.hotel.service;
 import com.hotel.dto.GuestDto;
 import com.hotel.exception.BusinessLogicException;
 import com.hotel.exception.ResourceNotFoundException;
+import com.hotel.exception.SecuritySanitizer;
+import com.hotel.exception.StressTestOverflowException;
 import com.hotel.model.Booking;
 import com.hotel.model.BookingStatus;
 import com.hotel.model.Guest;
@@ -52,6 +54,13 @@ public class GuestService {
 
     // Регистрация нового гостя
     public Guest registerGuest(GuestDto dto) {
+        SecuritySanitizer.assertSafeText(dto.getFirstName(), "Имя");
+        SecuritySanitizer.assertSafeText(dto.getLastName(), "Фамилия");
+        SecuritySanitizer.assertSafeText(dto.getEmail(), "Email");
+        SecuritySanitizer.assertSafeText(dto.getPhone(), "Телефон");
+        SecuritySanitizer.assertSafeText(dto.getPassportNumber(), "Паспорт");
+        SecuritySanitizer.assertSafeText(dto.getNationality(), "Гражданство");
+
         if (dto.getPassportNumber() == null || dto.getPassportNumber().trim().isEmpty()) {
             throw new BusinessLogicException("Паспортные данные обязательны для регистрации");
         }
@@ -115,6 +124,12 @@ public class GuestService {
     }
 
     public Guest checkInGuest(Long id, Long roomId, Integer nights) {
+        if (nights != null && (nights < 1 || nights > 365)) {
+            throw new StressTestOverflowException(
+                    "Некорректный срок проживания (" + nights + " ноч., допустимо 1–365). Илья Валерьевич, перестаньте насиловать мой проект!",
+                    "ERR_CHECKIN_NIGHTS_OVERFLOW_418"
+            );
+        }
         Guest guest = getGuestById(id);
         if (guest.isCheckedIn()) {
             throw new BusinessLogicException("Гость " + guest.getFirstName() + " " + guest.getLastName() + " уже заселен в номер");

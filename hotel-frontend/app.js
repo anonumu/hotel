@@ -6,10 +6,14 @@
 // Архитектура: Интерактивный поэтажный план отеля, защита от некорректных действий
 // ==========================================================================
 
-const API_BASE = 'http://localhost:8080/api/v1';
+const API_BASE = (window.location.protocol === 'http:' || window.location.protocol === 'https:')
+  ? `${window.location.origin}/api/v1`
+  : 'http://localhost:8080/api/v1';
 
 // Состояние подключения к бэкенду
 let isApiOnline = false;
+let globalPaymentsCache = [];
+let globalStaffCache = [];
 
 // Локальное реактивное хранилище для автономной работы и демо-режима
 const store = {
@@ -101,6 +105,23 @@ function escapeHtml(str) {
     .replace(/'/g, '&#039;');
 }
 
+// Детектор попыток XSS / SQL-инъекций при вводе
+function hasInjectionPayload(value) {
+  if (!value) return false;
+  return /(<\s*script\b|<\/\s*script>|javascript\s*:|onerror\s*=|onload\s*=|\bdrop\s+table\b|\btruncate\s+table\b|\bdelete\s+from\b|\bunion\s+select\b|'\s*or\s*'1'\s*=\s*'1|"\s*or\s*"1"\s*=\s*"1)/i.test(String(value));
+}
+
+// Безопасное вычисление смещённой даты без RangeError при вводе экстремального числа ночей
+function safeAddDaysIso(baseDateStr, days) {
+  const numDays = Number(days);
+  if (!Number.isFinite(numDays) || numDays < 1 || numDays > 3650) return null;
+  const d = baseDateStr ? new Date(baseDateStr) : new Date();
+  if (isNaN(d.getTime())) return null;
+  d.setDate(d.getDate() + numDays);
+  if (isNaN(d.getTime())) return null;
+  return d.toISOString().split('T')[0];
+}
+
 // ==========================================================================
 // СИСТЕМА АКТИВНОЙ ЗАЩИТЫ ОТ СТРЕСС-ТЕСТИРОВАНИЯ (ИЛЬЯ ВАЛЕРЬЕВИЧ)
 // ==========================================================================
@@ -163,13 +184,19 @@ function dismissStressOverlay() {
   if (bookCount && (parseInt(bookCount.value) > 10 || parseInt(bookCount.value) <= 0)) bookCount.value = 2;
 
   const payAmount = document.getElementById('pay-amount');
-  if (payAmount && parseFloat(payAmount.value) > 5000000) payAmount.value = 5000;
+  if (payAmount && (parseFloat(payAmount.value) > 5000000 || parseFloat(payAmount.value) < 0)) payAmount.value = 5000;
 
   const roomPrice = document.getElementById('add-room-price');
-  if (roomPrice && parseFloat(roomPrice.value) > 1000000) roomPrice.value = 4500;
+  if (roomPrice && (parseFloat(roomPrice.value) > 1000000 || parseFloat(roomPrice.value) < 0)) roomPrice.value = 4500;
 
   const roomGuests = document.getElementById('add-room-guests');
-  if (roomGuests && parseInt(roomGuests.value) > 20) roomGuests.value = 2;
+  if (roomGuests && (parseInt(roomGuests.value) > 20 || parseInt(roomGuests.value) <= 0)) roomGuests.value = 2;
+
+  const roomFloor = document.getElementById('add-room-floor');
+  if (roomFloor && (parseInt(roomFloor.value) > 50 || parseInt(roomFloor.value) <= 0)) roomFloor.value = 2;
+
+  const nightsInput = document.getElementById('newbook-nights');
+  if (nightsInput && (parseInt(nightsInput.value) > 365 || parseInt(nightsInput.value) <= 0)) nightsInput.value = 3;
 
   notify('Штатный режим восстановлен. Параметры возвращены в безопасный диапазон.');
 }
@@ -247,15 +274,15 @@ async function checkBackendConnection(manual = false) {
 function syncServerStatus(online) {
   const dot = document.getElementById('server-status-dot');
   const txt = document.getElementById('server-status-label');
-  if (dot) dot.className = `server-dot ${online ? '' : 'offline'}`;
-  if (txt) txt.innerText = online ? 'REST API активен (порт 8080)' : 'Автономный режим (Демо)';
+  if (dot) dot.className = `server-pulse-dot ${online ? '' : 'offline'}`;
+  if (txt) txt.innerText = online ? '8080 OK' : 'Демо (офлайн)';
 }
 
-// Запросы к REST API с защитой от сбоев и активным перехватом стресс-тестирования
+// Запросы к REST API с защитой от сбоев и активным перехватом критических ошибок / стресс-тестов
 async function api(endpoint, options = {}) {
   const method = (options.method || 'GET').toUpperCase();
   if (!checkFloodProtection(method)) {
-    throw new Error('Илья Валерьевич, перестаньте насиловать мой проект (перегрузка базы данных)');
+    throw new Error('Илья Валерьевич, перестаньте насиловать мой проект! Зафиксирован флуд запросами на изменение БД.');
   }
 
   if (isApiOnline) {
@@ -282,25 +309,41 @@ async function api(endpoint, options = {}) {
         else if (errJson && errJson.error) errorMsg = errJson.error;
       } catch (_) { }
 
-      // Перехват стресс-тестирования граничных значений и перегрузки (HTTP 418, 500, 503)
-      if (res.status === 418 || res.status === 500 || res.status === 503 ||
-        (errorMsg && (errorMsg.includes('Илья Валерьевич') || errorMsg.includes('ERR_SAMSONOV')))) {
+      const errCode = errJson?.errorCode || '';
+      const isStressOrCrash =
+        res.status === 418 ||
+        res.status === 429 ||
+        res.status >= 500 ||
+        errCode.startsWith('ERR_SAMSONOV') ||
+        errCode.startsWith('ERR_MAX_') ||
+        errCode.startsWith('ERR_SECURITY_') ||
+        errCode.startsWith('ERR_FLOOR_') ||
+        errCode.startsWith('ERR_BOOKING_DURATION') ||
+        errCode.startsWith('ERR_CHECKIN_NIGHTS') ||
+        errCode.startsWith('ERR_NEGATIVE_') ||
+        errCode.startsWith('ERR_INTERNAL_') ||
+        (errorMsg && errorMsg.includes('Илья Валерьевич'));
+
+      // Экран защиты срабатывает только при фаззинге, переполнении, инъекции, флуде или системном сбое (500/418/429)
+      if (isStressOrCrash) {
         triggerSamsonovStressOverlay({
-          code: errJson?.errorCode || `ERR_HTTP_${res.status}_SAMSONOV_DEFENSE`,
-          source: `REST API: ${options.method || 'GET'} ${endpoint} (Статус ${res.status})`,
+          code: errCode || `ERR_HTTP_${res.status}_PROTECTION`,
+          source: `REST API: ${method} ${endpoint} (HTTP ${res.status})`,
           reason: errorMsg,
-          details: errJson?.message || 'База данных отеля заблокировала потенциально разрушительный запрос. Целостность таблиц и данных гостей полностью защищена!'
+          details: errorMsg
         });
       }
 
       const error = new Error(errorMsg);
       error.status = res.status;
+      error.isStress = isStressOrCrash;
       error.data = errJson;
       throw error;
     }
 
     if (res.status === 204) return null;
-    return await res.json();
+    const text = await res.text();
+    return text ? JSON.parse(text) : null;
   }
 
   return mockApi(endpoint, options);
@@ -738,6 +781,21 @@ function mockApi(endpoint, options = {}) {
     };
   }
 
+  if (endpoint === '/reports/guests') {
+    const currentlyCheckedIn = store.guests.filter(g => g.checkedIn).length;
+    const byNat = {};
+    store.guests.forEach(g => {
+      const n = g.nationality || 'Не указано';
+      byNat[n] = (byNat[n] || 0) + 1;
+    });
+    return {
+      totalGuests: store.guests.length,
+      currentlyCheckedIn,
+      totalBookings: store.bookings.length,
+      guestsByNationality: byNat
+    };
+  }
+
   if (endpoint === '/reports/staff-performance') {
     return {
       staffStats: store.staff.map(s => ({
@@ -749,6 +807,11 @@ function mockApi(endpoint, options = {}) {
         shift: s.id % 2 === 0 ? 'Дневная смена (08:00 - 20:00)' : 'Ночная смена (20:00 - 08:00)'
       }))
     };
+  }
+
+  if (endpoint === '/system/reset-demo') {
+    location.reload();
+    return { status: 'OK' };
   }
 
   return null;
@@ -835,11 +898,13 @@ let selectedCockpitBookingId = null;
 let cockpitFilterMode = 'ALL'; // 'ALL' | 'UNPAID' | 'CHECKED_IN'
 
 async function renderDashboard() {
-  const [rooms, guests, rev, bookings] = await Promise.all([
+  const [rooms, guests, rev, bookings, payments, staff] = await Promise.all([
     api('/rooms'),
     api('/guests'),
     api('/reports/revenue'),
-    api('/bookings')
+    api('/bookings'),
+    api('/payments'),
+    api('/staff')
   ]);
 
   if (!rooms) return;
@@ -847,68 +912,102 @@ async function renderDashboard() {
   globalRoomsCache = rooms;
   globalGuestsCache = guests || [];
   globalBookingsCache = bookings || [];
+  globalPaymentsCache = payments || [];
+  globalStaffCache = staff || [];
+
+  // Показываем баннер восстановления, если фонд номеров пуст
+  const emptyBanner = document.getElementById('empty-db-banner');
+  if (emptyBanner) {
+    emptyBanner.style.display = rooms.length === 0 ? 'flex' : 'none';
+  }
 
   const total = rooms.length;
   const occupied = rooms.filter(r => r.status === 'OCCUPIED').length;
-  const available = rooms.filter(r => r.status === 'AVAILABLE').length;
+  const availableRoomsList = rooms.filter(r => r.status === 'AVAILABLE');
+  const available = availableRoomsList.length;
+  const bookedRooms = rooms.filter(r => r.status === 'BOOKED').length;
   const cleaning = rooms.filter(r => r.status === 'CLEANING').length;
   const repair = rooms.filter(r => r.status === 'OUT_OF_ORDER').length;
   const rate = total > 0 ? Math.round((occupied / total) * 100) : 0;
 
-  // 1. Загрузка фонда
+  // 1. Загрузка фонда (реальные цифры без хардкода)
   const rateEl = document.getElementById('dash-kpi-rate');
   if (rateEl) rateEl.innerText = `${rate}%`;
+
+  const occTrendEl = document.getElementById('dash-kpi-occ-trend');
+  if (occTrendEl) {
+    occTrendEl.innerText = `Свободно: ${available} • Бронь: ${bookedRooms} • Уборка: ${cleaning}${repair ? ' • Ремонт: ' + repair : ''}`;
+  }
 
   const occMetaEl = document.getElementById('dash-kpi-occ-meta');
   if (occMetaEl) occMetaEl.innerText = `${occupied} из ${total} номеров занято`;
 
-  const occBarEl = document.getElementById('dash-kpi-occ-bar');
-  if (occBarEl) occBarEl.style.width = `${rate}%`;
-
-  // 2. Выручка
+  // 2. Выручка за период (реальные данные и динамическая диаграмма)
+  const totalRev = Number(rev?.totalRevenue || 0);
   const revEl = document.getElementById('dash-kpi-rev');
-  if (revEl) revEl.innerText = formatRub(rev?.totalRevenue || 0);
+  if (revEl) revEl.innerText = formatRub(totalRev);
 
-  const txCount = rev?.totalPaymentsCount ?? rev?.totalTransactions ?? 0;
-  const txEl = document.getElementById('dash-kpi-tx-count');
-  if (txEl) txEl.innerText = `${txCount} платежей в кассе`;
-
+  const txCount = rev?.totalPaymentsCount ?? rev?.totalTransactions ?? globalPaymentsCache.length;
   const byMethod = rev?.revenueByPaymentMethod || rev?.revenueByMethod || {};
-  const cardVal = Number(byMethod.CARD || byMethod.card || 0);
-  const cashVal = Number(byMethod.CASH || byMethod.cash || 0);
+  const cardVal = Number(byMethod.CARD ?? byMethod.card ?? 0);
+  const cashVal = Number(byMethod.CASH ?? byMethod.cash ?? 0);
+  const transferVal = Number(byMethod.TRANSFER ?? byMethod.transfer ?? 0);
 
-  const cardEl = document.getElementById('dash-kpi-card-val');
-  if (cardEl) cardEl.innerText = `Карта: ${formatRub(cardVal)}`;
+  const revTrendEl = document.getElementById('dash-kpi-rev-trend');
+  if (revTrendEl) {
+    revTrendEl.innerText = `${txCount} плат. • Карта: ${formatRub(cardVal)} • Нал: ${formatRub(cashVal)}`;
+  }
 
-  const cashMetaEl = document.getElementById('dash-kpi-cash-val');
-  if (cashMetaEl) cashMetaEl.innerText = `Нал: ${formatRub(cashVal)}`;
+  renderDashboardRevenueBars({ CARD: cardVal, TRANSFER: transferVal, CASH: cashVal, totalRev });
 
-  // 3. Средний срок проживания (Finnova Card 3)
-  const completedOrActive = (bookings || []).filter(b => b.checkInDate && b.checkOutDate);
-  let avgStay = 3.4;
-  if (completedOrActive.length > 0) {
-    const totalNights = completedOrActive.reduce((sum, b) => sum + calculateNights(b.checkInDate, b.checkOutDate), 0);
-    avgStay = (totalNights / completedOrActive.length).toFixed(1);
+  // 3. Средний срок проживания (реальный расчёт без фейка 3.4)
+  const activeOrCompletedBooks = globalBookingsCache.filter(b => b.status !== 'CANCELLED' && b.checkInDate && b.checkOutDate);
+  let avgStayText = '0 ноч.';
+  let stayValues = [];
+  if (activeOrCompletedBooks.length > 0) {
+    stayValues = activeOrCompletedBooks.map(b => calculateNights(b.checkInDate, b.checkOutDate));
+    const totalNights = stayValues.reduce((sum, n) => sum + n, 0);
+    avgStayText = `${(totalNights / activeOrCompletedBooks.length).toFixed(1)} ноч.`;
   }
   const avgStayEl = document.getElementById('dash-kpi-avg-stay');
-  if (avgStayEl) avgStayEl.innerText = `${avgStay} ноч.`;
+  if (avgStayEl) avgStayEl.innerText = avgStayText;
 
-  // 4. Свободные номера (Finnova Card 4)
+  const checkedInGuestsCount = globalGuestsCache.filter(g => g.checkedIn).length;
+  const avgTrendEl = document.getElementById('dash-kpi-avg-trend');
+  if (avgTrendEl) {
+    avgTrendEl.innerText = `Броней: ${activeOrCompletedBooks.length} • Проживают: ${checkedInGuestsCount}`;
+  }
+  renderDashboardStaySpline(stayValues);
+
+  // 4. Доступно к заселению (только реально свободные номера из БД)
   const availEl = document.getElementById('dash-kpi-avail');
   if (availEl) availEl.innerText = `${available} ном.`;
 
-  // 5. Служебный фонд
-  const cleanEl = document.getElementById('dash-kpi-clean');
-  if (cleanEl) cleanEl.innerText = cleaning + repair;
+  const availPillEl = document.getElementById('dash-avail-pill');
+  if (availPillEl) availPillEl.innerText = available > 0 ? 'Готовы к заезду' : 'Нет свободных';
 
-  const servMetaEl = document.getElementById('dash-kpi-service-meta');
-  if (servMetaEl) servMetaEl.innerText = `${cleaning} на уборке • ${repair} на ремонте`;
+  const chipsBox = document.getElementById('dash-avail-chips');
+  if (chipsBox) {
+    const topFree = availableRoomsList.slice(0, 3);
+    const chipsHtml = topFree.length > 0
+      ? topFree.map((r, idx) => `
+          <button type="button" class="finnova-mini-chip ${idx === 0 ? 'active' : ''}" onclick="event.stopPropagation(); openBookingWithRoom(${r.id})" title="Забронировать № ${escapeHtml(r.roomNumber)} (${formatRub(r.pricePerNight)}/сут.)">
+            № ${escapeHtml(r.roomNumber)}
+          </button>
+        `).join('')
+      : '<span style="font-size:11.5px; color:#64748b">Свободных номеров нет</span>';
 
-  // Отрисовка флагманского темного кокпита (Dual-Pane Master-Detail)
-  renderDashboardCockpit();
+    chipsBox.innerHTML = `
+      ${chipsHtml}
+      <button type="button" class="finnova-payout-btn" onclick="event.stopPropagation(); openQuickBookingFromCard()">Заселить</button>
+    `;
+  }
 
-  // Отрисовка коридоров этажей с интерактивными дверями
-  renderFloorCorridors(rooms, currentFloorFilter);
+  // Синхронизируем динамический список этажей под реальный фонд
+  syncDashboardFloorSelect(rooms);
+
+  // Отрисовка всех разделов сводки с учётом активных фильтров
+  filterDashboardContent();
 
   // Отрисовка текущих постояльцев в номерах
   renderCurrentOccupantsTable();
@@ -916,24 +1015,150 @@ async function renderDashboard() {
   updateNavCounts({
     rooms: rooms.length,
     guests: globalGuestsCache.length,
-    bookings: globalBookingsCache.length
+    bookings: globalBookingsCache.length,
+    staff: globalStaffCache.length
   });
 }
 
+function renderDashboardRevenueBars({ CARD, TRANSFER, CASH, totalRev }) {
+  const barsContainer = document.getElementById('dash-revenue-bars');
+  if (!barsContainer) return;
+
+  // Берём последние 6 платежей или группировку по способам оплаты, чтобы график отражал реальную кассу
+  const recentPayments = [...globalPaymentsCache]
+    .sort((a, b) => (a.id || 0) - (b.id || 0))
+    .slice(-6);
+
+  let items = [];
+  if (recentPayments.length > 0) {
+    const maxVal = Math.max(...recentPayments.map(p => Number(p.amount) || 0), 1);
+    items = recentPayments.map((p, i) => ({
+      label: `#${p.id}`,
+      pct: Math.max(14, Math.round(((Number(p.amount) || 0) / maxVal) * 100)),
+      title: `Платёж #${p.id}: ${formatRub(p.amount)}`,
+      highlight: i === recentPayments.length - 1
+    }));
+  } else {
+    const methodItems = [
+      { label: 'Карта', val: CARD },
+      { label: 'Счёт', val: TRANSFER },
+      { label: 'Нал', val: CASH }
+    ];
+    const maxM = Math.max(CARD, TRANSFER, CASH, 1);
+    items = methodItems.map(m => ({
+      label: m.label,
+      pct: totalRev > 0 ? Math.max(12, Math.round((m.val / maxM) * 100)) : 10,
+      title: `${m.label}: ${formatRub(m.val)}`,
+      highlight: m.val === maxM && totalRev > 0
+    }));
+  }
+
+  barsContainer.innerHTML = items.map(it => `
+    <div class="chart-bar-col" title="${escapeHtml(it.title)}">
+      <div class="chart-bar ${it.highlight ? 'highlight' : ''}" style="height:${it.pct}%"></div>
+      <span>${escapeHtml(it.label)}</span>
+    </div>
+  `).join('');
+}
+
+function renderDashboardStaySpline(durations) {
+  const box = document.getElementById('dash-stay-spline');
+  if (!box) return;
+
+  if (!durations || durations.length === 0) {
+    box.innerHTML = `
+      <svg width="100%" height="52" viewBox="0 0 240 52" fill="none" preserveAspectRatio="none">
+        <line x1="8" y1="42" x2="232" y2="42" stroke="#cbd5e1" stroke-width="2" stroke-dasharray="4 4"/>
+      </svg>
+    `;
+    return;
+  }
+
+  const pts = durations.length === 1 ? [durations[0], durations[0]] : durations.slice(-8);
+  const maxD = Math.max(...pts, 1);
+  const coords = pts.map((val, idx) => {
+    const x = Math.round(12 + (idx * 216) / (pts.length - 1));
+    const y = Math.round(44 - (val / maxD) * 34);
+    return { x, y, val };
+  });
+
+  const linePath = coords.map((c, i) => `${i === 0 ? 'M' : 'L'}${c.x} ${c.y}`).join(' ');
+  const areaPath = `${linePath} L${coords[coords.length - 1].x} 52 L${coords[0].x} 52 Z`;
+
+  box.innerHTML = `
+    <svg width="100%" height="52" viewBox="0 0 240 52" fill="none" preserveAspectRatio="none">
+      <defs>
+        <linearGradient id="splineGradientDyn" x1="0" y1="0" x2="0" y2="52" gradientUnits="userSpaceOnUse">
+          <stop stop-color="#818cf8" stop-opacity="0.45"/>
+          <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      <path d="${areaPath}" fill="url(#splineGradientDyn)"/>
+      <path d="${linePath}" stroke="#4f46e5" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      ${coords.map(c => `<circle cx="${c.x}" cy="${c.y}" r="3.5" fill="#4f46e5" stroke="#ffffff" stroke-width="2"><title>${c.val} ноч.</title></circle>`).join('')}
+    </svg>
+  `;
+}
+
+function syncDashboardFloorSelect(rooms) {
+  const floorSel = document.getElementById('dash-filter-floor');
+  if (!floorSel) return;
+  const prev = floorSel.value || 'all';
+  const floors = [...new Set(rooms.map(r => r.floor || 1))].sort((a, b) => a - b);
+  const stdFloors = floors.length > 0 ? floors : [1, 2, 3, 4];
+  floorSel.innerHTML = '<option value="all">Все этажи здания</option>' +
+    stdFloors.map(f => `<option value="${f}">${f}-й этаж</option>`).join('');
+  if ([...floorSel.options].some(o => o.value === prev)) {
+    floorSel.value = prev;
+  } else {
+    floorSel.value = 'all';
+    currentFloorFilter = 'all';
+  }
+}
+
+function navigateToAvailableRooms() {
+  navigateTo('rooms');
+  const sel = document.getElementById('room-status-filter');
+  if (sel) {
+    sel.value = 'AVAILABLE';
+    filterRoomsList();
+  }
+}
+
+function openQuickBookingFromCard() {
+  const freeRoom = globalRoomsCache.find(r => r.status === 'AVAILABLE');
+  if (freeRoom) {
+    openBookingWithRoom(freeRoom.id);
+  } else {
+    openModal('modal-add-booking');
+  }
+}
+
+async function restoreDemoData() {
+  try {
+    await api('/system/reset-demo', { method: 'POST' });
+    notify('Стартовый номерной фонд, гости, брони и платежи восстановлены');
+    await refreshAllViews();
+    renderReports();
+  } catch (err) {
+    notify(err.message || 'Не удалось восстановить данные', 'err');
+  }
+}
+
 // Отрисовка флагманского двухпанельного темного кокпита
-function renderDashboardCockpit() {
+function renderDashboardCockpit(filteredBookingsOverride = null) {
   const listEl = document.getElementById('cockpit-bookings-list');
   const detailEl = document.getElementById('cockpit-detail-container');
   if (!listEl || !detailEl) return;
 
-  let activeBooks = globalBookingsCache.filter(b => b.status !== 'CANCELLED');
+  const baseBookings = filteredBookingsOverride !== null ? filteredBookingsOverride : globalBookingsCache;
+  let activeBooks = baseBookings.filter(b => b.status !== 'CANCELLED');
   if (cockpitFilterMode === 'UNPAID') {
     activeBooks = activeBooks.filter(b => b.status === 'CONFIRMED' || b.status === 'PENDING');
   } else if (cockpitFilterMode === 'CHECKED_IN') {
     activeBooks = activeBooks.filter(b => b.status === 'CHECKED_IN');
   }
 
-  // Счетчик активных броней
   const countEl = document.getElementById('cockpit-count-badge');
   if (countEl) countEl.innerText = activeBooks.length;
 
@@ -943,27 +1168,24 @@ function renderDashboardCockpit() {
     return;
   }
 
-  // Автоматический выбор первого элемента
   if (!selectedCockpitBookingId || !activeBooks.some(b => b.id === selectedCockpitBookingId)) {
     selectedCockpitBookingId = activeBooks[0].id;
   }
 
-  // Отрисовка списка слева
   const today = new Date().toISOString().split('T')[0];
   listEl.innerHTML = activeBooks.map(b => {
     const isSelected = b.id === selectedCockpitBookingId;
     const guest = b.guest || globalGuestsCache.find(g => g.id === (b.guestId || b.guest_id || (b.guest && b.guest.id)));
     const guestName = guest ? `${guest.firstName} ${guest.lastName}` : `Гость #${b.id}`;
     const initials = guest ? `${guest.firstName[0] || ''}${guest.lastName[0] || ''}` : 'Г';
-    const room = globalRoomsCache.find(r => r.id === (b.roomId || b.room_id || (b.room && b.room.id)));
+    const room = b.room || globalRoomsCache.find(r => r.id === (b.roomId || b.room_id || (b.room && b.room.id)));
     const statusLabel = LABELS.bookingStatuses[b.status] || b.status;
     const nights = calculateNights(b.checkInDate, b.checkOutDate);
 
-    // Относительные дни
     let relativeText = `${nights} ноч.`;
     if (b.status === 'CHECKED_IN') {
-      const remaining = calculateNights(today, b.checkOutDate);
-      relativeText = remaining === 0 ? 'Выезд сегодня' : (remaining > 0 ? `Осталось ${remaining} ноч.` : 'Просрочено');
+      const remaining = Math.round((new Date(b.checkOutDate) - new Date(today)) / (1000 * 60 * 60 * 24));
+      relativeText = remaining === 0 ? 'Выезд сегодня' : (remaining > 0 ? `Осталось ${remaining} ноч.` : `Просрочено (${Math.abs(remaining)} дн.)`);
     } else if (b.checkInDate === today) {
       relativeText = 'Заезд сегодня';
     } else if (b.checkInDate > today) {
@@ -984,18 +1206,27 @@ function renderDashboardCockpit() {
     `;
   }).join('');
 
-  // Отрисовка правой детальной карточки
   const selBook = activeBooks.find(b => b.id === selectedCockpitBookingId) || activeBooks[0];
   if (!selBook) return;
 
   const selGuest = selBook.guest || globalGuestsCache.find(g => g.id === (selBook.guestId || selBook.guest_id || (selBook.guest && selBook.guest.id)));
-  const selRoom = globalRoomsCache.find(r => r.id === (selBook.roomId || selBook.room_id || (selBook.room && selBook.room.id)));
+  const selRoom = selBook.room || globalRoomsCache.find(r => r.id === (selBook.roomId || selBook.room_id || (selBook.room && selBook.room.id)));
   const guestInitials = selGuest ? `${selGuest.firstName[0] || ''}${selGuest.lastName[0] || ''}` : 'ГИ';
   const nights = calculateNights(selBook.checkInDate, selBook.checkOutDate);
   const roomPricePerNight = selRoom ? selRoom.pricePerNight : (selBook.totalPrice / (nights || 1));
   const stayCost = roomPricePerNight * nights;
   const extraServices = Math.max(0, selBook.totalPrice - stayCost);
   const statusLabel = LABELS.bookingStatuses[selBook.status] || selBook.status;
+
+  // Реальный расчёт оплаченной суммы и остатка по кассовым платежам из БД
+  const paidForBooking = globalPaymentsCache
+    .filter(p => (p.bookingId || p.booking_id || (p.booking && p.booking.id)) === selBook.id)
+    .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+  const balanceDue = Math.max(0, Number(selBook.totalPrice || 0) - paidForBooking);
+  const paymentColor = balanceDue <= 0 ? '#6ee7b7' : '#fde68a';
+  const paymentText = balanceDue <= 0
+    ? 'Оплачено (Баланс 0 ₽)'
+    : `Долг: ${formatRub(balanceDue)} (внесено ${formatRub(paidForBooking)})`;
 
   detailEl.innerHTML = `
     <div class="cockpit-detail-top">
@@ -1007,9 +1238,7 @@ function renderDashboardCockpit() {
         <div class="cockpit-detail-h1"># БРОНЬ-${selBook.id}</div>
       </div>
       <div class="cockpit-detail-brand">
-        <div class="cockpit-brand-pill">
-          GRAND IMPÉRIAL PMS
-        </div>
+        <div class="cockpit-brand-pill">GRAND IMPÉRIAL PMS</div>
       </div>
       <div class="cockpit-guest-badge">
         <div class="cockpit-avatar">${guestInitials}</div>
@@ -1032,9 +1261,9 @@ function renderDashboardCockpit() {
         <div class="cockpit-subcard-date">до ${selRoom ? selRoom.maxGuests : 2} гостей</div>
       </div>
       <div class="cockpit-subcard">
-        <div class="cockpit-subcard-sum">${formatRub(extraServices)}</div>
-        <div class="cockpit-subcard-label">Питание и обслуживание</div>
-        <div class="cockpit-subcard-date">Включено в счёт</div>
+        <div class="cockpit-subcard-sum">${formatRub(paidForBooking)}</div>
+        <div class="cockpit-subcard-label">Внесено по кассе</div>
+        <div class="cockpit-subcard-date">${extraServices > 0 ? `Доп. услуги: ${formatRub(extraServices)}` : 'Учтено в инвойсе'}</div>
       </div>
       <div class="cockpit-subcard dashed" onclick="openPaymentWithBooking(${selBook.id})">
         <div class="cockpit-plus-icon">+</div>
@@ -1048,12 +1277,12 @@ function renderDashboardCockpit() {
         <span class="foot-val">${formatRub(stayCost)}</span>
       </div>
       <div class="cockpit-footer-col">
-        <span class="foot-label">Итого к оплате</span>
+        <span class="foot-label">Итого по счету</span>
         <span class="foot-val">${formatRub(selBook.totalPrice)}</span>
       </div>
       <div class="cockpit-footer-col">
         <span class="foot-label">Статус оплаты</span>
-        <span class="foot-val" style="color:${selBook.status === 'CHECKED_IN' ? '#6ee7b7' : '#fde68a'}">${selBook.status === 'CHECKED_IN' ? 'Оплачено (Баланс 0 ₽)' : formatRub(selBook.totalPrice)}</span>
+        <span class="foot-val" style="color:${paymentColor}; font-size:14px">${paymentText}</span>
       </div>
 
       <div class="cockpit-footer-actions">
@@ -1070,63 +1299,123 @@ function renderDashboardCockpit() {
 
 function selectCockpitBooking(id) {
   selectedCockpitBookingId = id;
-  renderDashboardCockpit();
+  filterDashboardContent();
 }
 
 function setCockpitFilter(mode, btn) {
   cockpitFilterMode = mode;
   document.querySelectorAll('.cockpit-tab-pill').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
-  renderDashboardCockpit();
+  filterDashboardContent();
 }
 
-function openPaymentWithBooking(bookingId) {
-  openPaymentModal();
-  const sel = document.getElementById('pay-booking');
-  if (sel) {
-    sel.value = bookingId;
-  }
+async function openPaymentWithBooking(bookingId) {
+  await openPaymentModal(bookingId);
 }
 
-function toggleActiveFilters() {
+function toggleFilterDrawer() {
   const row = document.querySelector('.filter-toolbar-row');
   if (row) {
-    row.style.display = row.style.display === 'none' ? 'flex' : 'none';
+    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const search = document.getElementById('dash-global-search');
+    if (search) search.focus();
   }
+}
+
+function resetDashboardFilters() {
+  const catEl = document.getElementById('dash-filter-category');
+  const stEl = document.getElementById('dash-filter-status');
+  const perEl = document.getElementById('dash-filter-period');
+  const flEl = document.getElementById('dash-filter-floor');
+  const srchEl = document.getElementById('dash-global-search');
+  if (catEl) catEl.value = '';
+  if (stEl) stEl.value = '';
+  if (perEl) perEl.value = 'all';
+  if (flEl) flEl.value = 'all';
+  if (srchEl) srchEl.value = '';
+  currentFloorFilter = 'all';
+  document.querySelectorAll('.floor-tab-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.innerText.includes('Все'));
+  });
+  filterDashboardContent();
+  notify('Фильтры сводки сброшены');
 }
 
 function filterDashboardContent() {
   const cat = document.getElementById('dash-filter-category')?.value || '';
   const st = document.getElementById('dash-filter-status')?.value || '';
+  const period = document.getElementById('dash-filter-period')?.value || 'all';
+  const floorVal = document.getElementById('dash-filter-floor')?.value || 'all';
+  const query = (document.getElementById('dash-global-search')?.value || '').toLowerCase().trim();
 
-  let filtered = globalRoomsCache;
-  if (cat) filtered = filtered.filter(r => r.type === cat);
-  if (st) filtered = filtered.filter(r => r.status === st);
-
-  renderFloorCorridors(filtered, currentFloorFilter);
-}
-
-function handleGlobalSearch(query) {
-  const q = (query || '').toLowerCase().trim();
-  if (!q) {
-    renderFloorCorridors(globalRoomsCache, currentFloorFilter);
-    return;
-  }
-  const filtered = globalRoomsCache.filter(r =>
-    r.roomNumber.toLowerCase().includes(q) ||
-    (LABELS.types[r.type] || '').toLowerCase().includes(q) ||
-    (LABELS.roomStatuses[r.status] || '').toLowerCase().includes(q)
-  );
-  renderFloorCorridors(filtered, 'all');
-}
-
-// Фильтрация этажей
-function filterFloorView(floor) {
-  currentFloorFilter = floor;
+  currentFloorFilter = floorVal;
   document.querySelectorAll('.floor-tab-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.innerText.includes(floor === 'all' ? 'Все' : `${floor}-й`));
+    btn.classList.toggle('active', btn.innerText.includes(floorVal === 'all' ? 'Все' : `${floorVal}-й`));
   });
-  renderFloorCorridors(globalRoomsCache, floor);
+
+  // Считаем реально активные фильтры
+  let activeCount = 0;
+  if (cat) activeCount++;
+  if (st) activeCount++;
+  if (period && period !== 'all') activeCount++;
+  if (floorVal && floorVal !== 'all') activeCount++;
+  if (query) activeCount++;
+  const badgeEl = document.getElementById('dash-active-filters-count');
+  if (badgeEl) badgeEl.innerText = activeCount;
+
+  // Фильтруем комнаты (по категории, статусу и поиску по номеру/гостю/паспорту)
+  let filteredRooms = globalRoomsCache.filter(r => {
+    if (cat && r.type !== cat) return false;
+    if (st && r.status !== st) return false;
+    if (!query) return true;
+
+    const matchRoom = r.roomNumber.toLowerCase().includes(query) ||
+      (LABELS.types[r.type] || '').toLowerCase().includes(query) ||
+      (LABELS.roomStatuses[r.status] || '').toLowerCase().includes(query);
+    if (matchRoom) return true;
+
+    const activeB = globalBookingsCache.find(b =>
+      ((b.roomId || (b.room && b.room.id)) === r.id) && b.status !== 'CANCELLED' && b.status !== 'CHECKED_OUT'
+    );
+    if (activeB) {
+      const g = activeB.guest || globalGuestsCache.find(x => x.id === (activeB.guestId || activeB.guest_id));
+      if (g) {
+        const gText = `${g.firstName} ${g.lastName} ${g.passportNumber} ${g.phone}`.toLowerCase();
+        if (gText.includes(query)) return true;
+      }
+    }
+    return false;
+  });
+
+  renderFloorCorridors(filteredRooms, floorVal);
+
+  // Фильтруем бронирования в Кокпите (по периоду, категории/статусу комнаты, этажу и поиску)
+  const filteredBookings = globalBookingsCache.filter(b => {
+    if (period !== 'all') {
+      const inMatch = (b.checkInDate || '').startsWith(period);
+      const outMatch = (b.checkOutDate || '').startsWith(period);
+      if (!inMatch && !outMatch) return false;
+    }
+    const r = b.room || globalRoomsCache.find(x => x.id === (b.roomId || b.room_id));
+    if (cat && (!r || r.type !== cat)) return false;
+    if (st && (!r || r.status !== st)) return false;
+    if (floorVal !== 'all' && (!r || String(r.floor) !== String(floorVal))) return false;
+    if (query) {
+      const g = b.guest || globalGuestsCache.find(x => x.id === (b.guestId || b.guest_id));
+      const haystack = `${b.id} ${r ? r.roomNumber : ''} ${g ? `${g.firstName} ${g.lastName} ${g.passportNumber} ${g.phone}` : ''}`.toLowerCase();
+      if (!haystack.includes(query)) return false;
+    }
+    return true;
+  });
+
+  renderDashboardCockpit(filteredBookings);
+}
+
+// Фильтрация этажей (синхронизируется с селектом в шапке фильтров)
+function filterFloorView(floor) {
+  const flEl = document.getElementById('dash-filter-floor');
+  if (flEl) flEl.value = String(floor);
+  filterDashboardContent();
 }
 
 // Поэтажная отрисовка дверей
@@ -1415,7 +1704,16 @@ function displayRoomsTable(rooms) {
   if (!tbody) return;
 
   if (rooms.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:24px">Номера не найдены</td></tr>';
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="7" style="text-align:center; color:var(--text-muted); padding:28px">
+          <div>Номера не найдены</div>
+          <div style="margin-top:10px">
+            <button type="button" class="btn btn-xs btn-primary" onclick="restoreDemoData()">Восстановить стартовые номера</button>
+          </div>
+        </td>
+      </tr>
+    `;
     return;
   }
 
@@ -1506,21 +1804,28 @@ function getRemainingNightsBadge(checkOutDateStr, status) {
 // Единое реактивное обновление всех представлений
 async function refreshAllViews() {
   try {
-    const [rooms, guests, bookings] = await Promise.all([
+    const [rooms, guests, bookings, payments, staff] = await Promise.all([
       api('/rooms'),
       api('/guests'),
-      api('/bookings')
+      api('/bookings'),
+      api('/payments'),
+      api('/staff')
     ]);
 
     if (rooms) globalRoomsCache = rooms;
     if (guests) globalGuestsCache = guests;
     if (bookings) globalBookingsCache = bookings;
+    if (payments) globalPaymentsCache = payments;
+    if (staff) globalStaffCache = staff;
 
     await Promise.all([
       renderDashboard(),
       renderRooms(rooms),
       renderBookings(bookings, rooms, guests),
       renderGuests(guests, bookings, rooms),
+      renderTariffs(),
+      renderStaff(),
+      renderReports(),
       populateBookingSelects(rooms, guests, bookings)
     ]);
   } catch (e) {
@@ -1648,19 +1953,18 @@ function updateRoomOptionsForDates(checkIn, checkOut, selectId = 'newbook-room')
   }
 }
 
-// Интерактивное управление ночами и датами в окне бронирования
+// Интерактивное управление ночами и датами в окне бронирования (защита от некорректных дат)
 function onBookingNightsChange() {
   const nightsInput = document.getElementById('newbook-nights');
   const inInput = document.getElementById('newbook-checkin');
   const outInput = document.getElementById('newbook-checkout');
-  const nights = parseInt(nightsInput?.value) || 1;
-  const inDate = inInput?.value ? new Date(inInput.value) : new Date();
+  const nights = parseInt(nightsInput?.value, 10);
+  const newOut = safeAddDaysIso(inInput?.value, Number.isFinite(nights) && nights > 0 ? Math.min(nights, 365) : 1);
+  if (outInput && newOut) outInput.value = newOut;
 
-  const outDate = new Date(inDate);
-  outDate.setDate(inDate.getDate() + nights);
-  if (outInput) outInput.value = outDate.toISOString().split('T')[0];
-
-  updateRoomOptionsForDates(inInput.value, outInput.value, 'newbook-room');
+  if (inInput?.value && outInput?.value) {
+    updateRoomOptionsForDates(inInput.value, outInput.value, 'newbook-room');
+  }
   recalculateBookingSummary();
 }
 
@@ -1668,14 +1972,13 @@ function onBookingCheckInDateChange() {
   const nightsInput = document.getElementById('newbook-nights');
   const inInput = document.getElementById('newbook-checkin');
   const outInput = document.getElementById('newbook-checkout');
-  const nights = parseInt(nightsInput?.value) || 1;
-  const inDate = inInput?.value ? new Date(inInput.value) : new Date();
+  const nights = parseInt(nightsInput?.value, 10);
+  const newOut = safeAddDaysIso(inInput?.value, Number.isFinite(nights) && nights > 0 ? Math.min(nights, 365) : 1);
+  if (outInput && newOut) outInput.value = newOut;
 
-  const outDate = new Date(inDate);
-  outDate.setDate(inDate.getDate() + nights);
-  if (outInput) outInput.value = outDate.toISOString().split('T')[0];
-
-  updateRoomOptionsForDates(inInput.value, outInput.value, 'newbook-room');
+  if (inInput?.value && outInput?.value) {
+    updateRoomOptionsForDates(inInput.value, outInput.value, 'newbook-room');
+  }
   recalculateBookingSummary();
 }
 
@@ -1969,19 +2272,18 @@ function openQuickCheckInModal(guestId) {
   openModal('modal-quick-checkin');
 }
 
-// Интерактивное управление датами и ночами в окне быстрого заселения
+// Интерактивное управление датами и ночами в окне быстрого заселения (защита от некорректных дат)
 function onQuickCheckInNightsInput() {
   const nightsInput = document.getElementById('checkin-nights');
   const inInput = document.getElementById('checkin-date');
   const outInput = document.getElementById('checkin-checkout-date');
-  const nights = parseInt(nightsInput?.value) || 1;
-  const inDate = inInput?.value ? new Date(inInput.value) : new Date();
+  const nights = parseInt(nightsInput?.value, 10);
+  const newOut = safeAddDaysIso(inInput?.value, Number.isFinite(nights) && nights > 0 ? Math.min(nights, 365) : 1);
+  if (outInput && newOut) outInput.value = newOut;
 
-  const outDate = new Date(inDate);
-  outDate.setDate(inDate.getDate() + nights);
-  if (outInput) outInput.value = outDate.toISOString().split('T')[0];
-
-  updateRoomOptionsForDates(inInput.value, outInput.value, 'checkin-room-select');
+  if (inInput?.value && outInput?.value) {
+    updateRoomOptionsForDates(inInput.value, outInput.value, 'checkin-room-select');
+  }
   recalculateCheckInSummary();
 }
 
@@ -1989,14 +2291,13 @@ function onQuickCheckInDateChange() {
   const nightsInput = document.getElementById('checkin-nights');
   const inInput = document.getElementById('checkin-date');
   const outInput = document.getElementById('checkin-checkout-date');
-  const nights = parseInt(nightsInput?.value) || 1;
-  const inDate = inInput?.value ? new Date(inInput.value) : new Date();
+  const nights = parseInt(nightsInput?.value, 10);
+  const newOut = safeAddDaysIso(inInput?.value, Number.isFinite(nights) && nights > 0 ? Math.min(nights, 365) : 1);
+  if (outInput && newOut) outInput.value = newOut;
 
-  const outDate = new Date(inDate);
-  outDate.setDate(inDate.getDate() + nights);
-  if (outInput) outInput.value = outDate.toISOString().split('T')[0];
-
-  updateRoomOptionsForDates(inInput.value, outInput.value, 'checkin-room-select');
+  if (inInput?.value && outInput?.value) {
+    updateRoomOptionsForDates(inInput.value, outInput.value, 'checkin-room-select');
+  }
   recalculateCheckInSummary();
 }
 
@@ -2068,7 +2369,17 @@ async function submitQuickCheckIn(e) {
   e.preventDefault();
   const guestId = parseInt(document.getElementById('checkin-guest-id').value);
   const roomId = parseInt(document.getElementById('checkin-room-select').value);
-  const nights = parseInt(document.getElementById('checkin-nights').value) || 3;
+  const nightsRaw = parseInt(document.getElementById('checkin-nights').value, 10);
+
+  if (isNaN(nightsRaw) || nightsRaw <= 0 || nightsRaw > 365) {
+    triggerSamsonovStressOverlay({
+      code: 'ERR_CHECKIN_NIGHTS_OVERFLOW_418',
+      source: `Быстрое заселение: указано ночей = ${document.getElementById('checkin-nights').value}`,
+      reason: `Попытка оформить заезд на аномальный срок (${document.getElementById('checkin-nights').value} ноч., допустимо: 1–365 ноч.).`,
+      details: 'Сработала защита сроков проживания от некорректных граничных значений.'
+    });
+    return;
+  }
 
   if (!roomId) {
     showModalAlert('modal-quick-checkin', 'Пожалуйста, выберите свободный номер');
@@ -2082,7 +2393,7 @@ async function submitQuickCheckIn(e) {
   clearModalAlert('modal-quick-checkin');
 
   try {
-    await api(`/guests/${guestId}/checkin?roomId=${roomId}&nights=${nights}`, { method: 'POST' });
+    await api(`/guests/${guestId}/checkin?roomId=${roomId}&nights=${nightsRaw}`, { method: 'POST' });
     notify('Гость успешно заселен в номер');
     closeModal('modal-quick-checkin');
     await refreshAllViews();
@@ -2204,19 +2515,68 @@ async function renderTariffs() {
   }
 }
 
-async function openPaymentModal() {
-  const books = await api('/bookings');
+async function openPaymentModal(preselectBookingId = null) {
+  const [books, payments, guests] = await Promise.all([
+    api('/bookings'),
+    api('/payments'),
+    api('/guests')
+  ]);
+  if (books) globalBookingsCache = books;
+  if (payments) globalPaymentsCache = payments;
+  if (guests) globalGuestsCache = guests;
+
   const sel = document.getElementById('pay-booking-sel');
-  if (sel && books) {
-    const activeBooks = books.filter(b => b.status !== 'CANCELLED');
-    sel.innerHTML = activeBooks.map(b => `
-      <option value="${b.id}">
-        Бронь #${b.id} — ${formatRub(b.totalPrice)} [${LABELS.bookingStatuses[b.status] || b.status}]
-      </option>
-    `).join('');
+  if (sel) {
+    const activeBooks = (books || []).filter(b => b.status !== 'CANCELLED');
+    if (activeBooks.length === 0) {
+      sel.innerHTML = '<option value="">Нет доступных бронирований для оплаты</option>';
+    } else {
+      sel.innerHTML = activeBooks.map(b => {
+        const g = b.guest || globalGuestsCache.find(x => x.id === (b.guestId || b.guest_id));
+        const gLabel = g ? `${g.firstName} ${g.lastName}` : `Гость #${b.guestId || b.id}`;
+        const paid = globalPaymentsCache
+          .filter(p => (p.bookingId || p.booking_id || (p.booking && p.booking.id)) === b.id)
+          .reduce((s, p) => s + (Number(p.amount) || 0), 0);
+        const due = Math.max(0, Number(b.totalPrice || 0) - paid);
+        const balHint = due <= 0 ? 'Оплачено' : `Остаток: ${formatRub(due)}`;
+        return `
+          <option value="${b.id}" data-due="${due}" data-total="${b.totalPrice}">
+            Бронь #${b.id} — ${escapeHtml(gLabel)} • ${formatRub(b.totalPrice)} (${balHint}) [${LABELS.bookingStatuses[b.status] || b.status}]
+          </option>
+        `;
+      }).join('');
+
+      if (preselectBookingId && activeBooks.some(b => String(b.id) === String(preselectBookingId))) {
+        sel.value = String(preselectBookingId);
+      } else {
+        // По умолчанию выбираем первую бронь с неоплаченным остатком
+        const unpaid = activeBooks.find(b => {
+          const paid = globalPaymentsCache
+            .filter(p => (p.bookingId || p.booking_id || (p.booking && p.booking.id)) === b.id)
+            .reduce((s, p) => s + (Number(p.amount) || 0), 0);
+          return (Number(b.totalPrice || 0) - paid) > 0;
+        });
+        if (unpaid) sel.value = String(unpaid.id);
+      }
+    }
   }
+  onPaymentBookingChange();
   clearModalAlert('modal-add-payment');
   openModal('modal-add-payment');
+}
+
+function onPaymentBookingChange() {
+  const sel = document.getElementById('pay-booking-sel');
+  const amtEl = document.getElementById('pay-amount');
+  if (!sel || !amtEl) return;
+  const opt = sel.selectedOptions[0];
+  if (!opt || !opt.value) {
+    amtEl.value = '';
+    return;
+  }
+  const due = parseFloat(opt.dataset.due || '0');
+  const total = parseFloat(opt.dataset.total || '5000');
+  amtEl.value = due > 0 ? due : (total > 0 ? total : 5000);
 }
 
 async function submitPayment(e) {
@@ -2227,34 +2587,68 @@ async function submitPayment(e) {
 
   clearModalAlert('modal-add-payment');
 
-  const payload = {
-    bookingId: parseInt(document.getElementById('pay-booking-sel').value),
-    amount: parseFloat(document.getElementById('pay-amount').value),
-    method: document.getElementById('pay-method').value,
-    description: document.getElementById('pay-desc').value.trim()
-  };
+  const bookingVal = document.getElementById('pay-booking-sel')?.value;
+  const amountRaw = document.getElementById('pay-amount')?.value;
+  const desc = (document.getElementById('pay-desc')?.value || '').trim();
 
-  if (payload.amount > 5000000 || isNaN(payload.amount) || payload.amount <= 0) {
+  if (!bookingVal) {
+    showModalAlert('modal-add-payment', 'Выберите бронирование для проведения оплаты');
+    if (btn) { btn.disabled = false; btn.innerHTML = origText; }
+    return;
+  }
+
+  if (hasInjectionPayload(desc)) {
     triggerSamsonovStressOverlay({
-      code: 'ERR_MAX_PAYMENT_OVERFLOW_418',
-      source: 'Форма оплаты: поле «Сумма платежа» = ' + formatRub(payload.amount),
-      reason: `Попытка провести максимальную сумму платежа (${formatRub(payload.amount)}, предел эквайринга: 5 000 000 ₽).`,
-      details: 'Илья Валерьевич, банковский шлюз гостиницы и финмониторинг заблокировали операцию во избежание блокировки счетов отеля!'
+      code: 'ERR_SECURITY_INJECTION_418',
+      source: 'Форма оплаты: поле «Назначение платежа»',
+      reason: 'Обнаружена попытка XSS/SQL-инъекции в примечании к платежу.',
+      details: 'Потенциально опасная строка заблокирована до обращения к БД.'
     });
     if (btn) { btn.disabled = false; btn.innerHTML = origText; }
     return;
   }
 
+  if (amountRaw === '' || amountRaw === null || amountRaw === undefined) {
+    showModalAlert('modal-add-payment', 'Укажите сумму платежа');
+    if (btn) { btn.disabled = false; btn.innerHTML = origText; }
+    return;
+  }
+
+  const amountNum = parseFloat(amountRaw);
+  if (isNaN(amountNum) || amountNum < 0 || amountNum > 5000000) {
+    triggerSamsonovStressOverlay({
+      code: amountNum < 0 ? 'ERR_NEGATIVE_PAYMENT_OVERFLOW_418' : 'ERR_MAX_PAYMENT_OVERFLOW_418',
+      source: 'Форма оплаты: поле «Сумма платежа» = ' + (isNaN(amountNum) ? amountRaw : formatRub(amountNum)),
+      reason: `Некорректная или запредельная сумма платежа (${amountRaw}, допустимо: от 1 до 5 000 000 ₽).`,
+      details: 'Платёжный шлюз отклонил аномальную транзакцию.'
+    });
+    if (btn) { btn.disabled = false; btn.innerHTML = origText; }
+    return;
+  }
+
+  if (amountNum === 0) {
+    showModalAlert('modal-add-payment', 'Сумма платежа должна быть строго больше 0 ₽');
+    if (btn) { btn.disabled = false; btn.innerHTML = origText; }
+    return;
+  }
+
+  const payload = {
+    bookingId: parseInt(bookingVal, 10),
+    amount: amountNum,
+    method: document.getElementById('pay-method').value,
+    description: desc || 'Оплата за проживание'
+  };
+
   try {
     await api('/payments', { method: 'POST', body: JSON.stringify(payload) });
     notify('Платеж успешно проведен');
     closeModal('modal-add-payment');
-    renderTariffs();
-    renderDashboard();
-    renderReports();
+    await refreshAllViews();
   } catch (err) {
-    showModalAlert('modal-add-payment', err.message);
-    notify(err.message, 'err');
+    if (!err.isStress) {
+      showModalAlert('modal-add-payment', err.message);
+      notify(err.message, 'err');
+    }
   } finally {
     if (btn) { btn.disabled = false; btn.innerHTML = origText; }
   }
@@ -2264,10 +2658,11 @@ async function submitPayment(e) {
 // 7. ОТЧЕТЫ И АНАЛИТИКА
 // ==========================================================================
 async function renderReports() {
-  const [occ, rev, staffRep] = await Promise.all([
+  const [occ, rev, staffRep, guestsRep] = await Promise.all([
     api('/reports/occupancy'),
     api('/reports/revenue'),
-    api('/reports/staff-performance')
+    api('/reports/staff-performance'),
+    api('/reports/guests')
   ]);
 
   if (occ) {
@@ -2311,6 +2706,14 @@ async function renderReports() {
     const txEl = document.getElementById('rep-rev-tx');
     if (txEl) txEl.innerText = `${txCount} платежей проведено`;
 
+    const revSubEl = document.getElementById('rep-rev-sub');
+    if (revSubEl) {
+      const avgCheck = txCount > 0 ? Math.round(totalRev / txCount) : 0;
+      revSubEl.innerText = txCount > 0
+        ? `Средний чек платежа: ${formatRub(avgCheck)}`
+        : 'Сумма всех подтвержденных кассовых поступлений';
+    }
+
     const cardEl = document.getElementById('rep-card-sum');
     if (cardEl) cardEl.innerText = formatRub(cardSum);
 
@@ -2335,18 +2738,27 @@ async function renderReports() {
     if (cashBar) cashBar.style.width = `${cashPct}%`;
   }
 
+  const guestsSumEl = document.getElementById('rep-guests-summary');
+  if (guestsSumEl && guestsRep) {
+    const byNat = guestsRep.guestsByNationality || {};
+    const natStr = Object.entries(byNat).map(([k, v]) => `${escapeHtml(k)}: <strong>${v}</strong>`).join(' • ');
+    guestsSumEl.innerHTML = `Всего гостей в базе: <strong>${guestsRep.totalGuests || 0}</strong> • Сейчас проживают: <strong>${guestsRep.currentlyCheckedIn || 0}</strong> • Броней: <strong>${guestsRep.totalBookings || 0}</strong>${natStr ? `<div style="margin-top:6px; color:#64748b">География: ${natStr}</div>` : ''}`;
+  }
+
   const staffList = (staffRep && (staffRep.staffStats || staffRep.stats || staffRep.staffMemberStats)) || [];
-  if (staffList.length > 0) {
-    const list = document.getElementById('rep-staff-kpi');
-    if (list) {
+  const list = document.getElementById('rep-staff-kpi');
+  if (list) {
+    if (staffList.length === 0) {
+      list.innerHTML = '<div style="color:var(--text-muted); font-size:13px">Сотрудники в базе отсутствуют</div>';
+    } else {
       list.innerHTML = staffList.map(s => `
-        <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--border-light)">
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--slate-100)">
           <div>
             <div style="font-weight:700; color:var(--text-main); font-size:13px">${escapeHtml(s.name)}</div>
             <div style="font-size:11.5px; color:var(--text-muted)">${LABELS.positions[s.position] || s.position} • ${s.shift || 'Смена'}</div>
           </div>
           <div style="text-align:right">
-            <div style="color:var(--brass-hover); font-weight:700; font-size:12.5px">Оценка: ${s.rating}</div>
+            <div style="color:#4f46e5; font-weight:700; font-size:12.5px">Оценка: ${s.rating}</div>
             <div style="font-size:11px; color:var(--text-dim)">Смен: ${s.tasksCompleted || 0}</div>
           </div>
         </div>
@@ -2418,37 +2830,83 @@ async function submitRoom(e) {
 
   clearModalAlert('modal-add-room');
 
-  const room = {
-    roomNumber: document.getElementById('add-room-num').value.trim(),
-    type: document.getElementById('add-room-type').value,
-    status: document.getElementById('add-room-status') ? document.getElementById('add-room-status').value : 'AVAILABLE',
-    floor: parseInt(document.getElementById('add-room-floor').value),
-    maxGuests: parseInt(document.getElementById('add-room-guests').value),
-    pricePerNight: parseFloat(document.getElementById('add-room-price').value),
-    description: document.getElementById('add-room-desc').value.trim()
-  };
+  const roomNum = document.getElementById('add-room-num').value.trim();
+  const floorVal = parseInt(document.getElementById('add-room-floor').value, 10);
+  const guestsVal = parseInt(document.getElementById('add-room-guests').value, 10);
+  const priceVal = parseFloat(document.getElementById('add-room-price').value);
+  const descVal = document.getElementById('add-room-desc').value.trim();
 
-  if (room.maxGuests > 20 || isNaN(room.maxGuests) || room.maxGuests <= 0) {
+  if (hasInjectionPayload(roomNum) || hasInjectionPayload(descVal)) {
+    triggerSamsonovStressOverlay({
+      code: 'ERR_SECURITY_INJECTION_418',
+      source: 'Форма добавления номера',
+      reason: 'Обнаружена попытка XSS/SQL-инъекции при добавлении номера.',
+      details: 'Некорректные управляющие конструкции заблокированы.'
+    });
+    if (btn) { btn.disabled = false; btn.innerHTML = origText; }
+    return;
+  }
+
+  if (!roomNum) {
+    showModalAlert('modal-add-room', 'Укажите номер комнаты (например, 103)');
+    if (btn) { btn.disabled = false; btn.innerHTML = origText; }
+    return;
+  }
+
+  if (isNaN(floorVal) || floorVal < 1 || floorVal > 50) {
+    triggerSamsonovStressOverlay({
+      code: 'ERR_FLOOR_OUT_OF_RANGE_418',
+      source: 'Форма добавления номера: поле «Этаж» = ' + document.getElementById('add-room-floor').value,
+      reason: `Этаж ${document.getElementById('add-room-floor').value} не существует в здании комплекса (допустимо: 1–50).`,
+      details: 'Введён недопустимый параметр этажности.'
+    });
+    if (btn) { btn.disabled = false; btn.innerHTML = origText; }
+    return;
+  }
+
+  if (isNaN(guestsVal) || guestsVal < 0 || guestsVal > 20) {
     triggerSamsonovStressOverlay({
       code: 'ERR_MAX_ROOM_CAPACITY_OVERFLOW_418',
-      source: 'Форма добавления номера: поле «Вместимость» = ' + room.maxGuests,
-      reason: `Попытка установить запредельную вместимость номера (${room.maxGuests} чел., строительный лимит: 20 чел.).`,
-      details: 'Илья Валерьевич, отель не может вместить такое количество гостей в одном помещении по нормам противопожарной безопасности!'
+      source: 'Форма добавления номера: поле «Вместимость» = ' + document.getElementById('add-room-guests').value,
+      reason: `Попытка установить недопустимую вместимость номера (${document.getElementById('add-room-guests').value} чел., допустимо: 1–20 чел.).`,
+      details: 'Сработал ограничитель строительных норм отеля.'
     });
     if (btn) { btn.disabled = false; btn.innerHTML = origText; }
     return;
   }
 
-  if (room.pricePerNight > 1000000 || isNaN(room.pricePerNight) || room.pricePerNight <= 0) {
+  if (guestsVal === 0) {
+    showModalAlert('modal-add-room', 'Вместимость номера должна быть не менее 1 человека');
+    if (btn) { btn.disabled = false; btn.innerHTML = origText; }
+    return;
+  }
+
+  if (isNaN(priceVal) || priceVal < 0 || priceVal > 1000000) {
     triggerSamsonovStressOverlay({
-      code: 'ERR_MAX_PRICE_OVERFLOW_418',
-      source: 'Форма добавления номера: поле «Цена за сутки» = ' + formatRub(room.pricePerNight),
-      reason: `Попытка установить запредельный тариф номера (${formatRub(room.pricePerNight)}, лимит тарифа: 1 000 000 ₽).`,
-      details: 'Илья Валерьевич, даже в президентском люксе Дубая тарифы скромнее, чем в вашем стресс-тесте!'
+      code: priceVal < 0 ? 'ERR_NEGATIVE_PRICE_OVERFLOW_418' : 'ERR_MAX_PRICE_OVERFLOW_418',
+      source: 'Форма добавления номера: поле «Тариф за сутки» = ' + document.getElementById('add-room-price').value,
+      reason: `Попытка установить некорректный или запредельный тариф (${document.getElementById('add-room-price').value} ₽, допустимо: 1–1 000 000 ₽).`,
+      details: 'Операция заблокирована защитой тарификации.'
     });
     if (btn) { btn.disabled = false; btn.innerHTML = origText; }
     return;
   }
+
+  if (priceVal === 0) {
+    showModalAlert('modal-add-room', 'Тариф за сутки должен быть строго больше 0 ₽');
+    if (btn) { btn.disabled = false; btn.innerHTML = origText; }
+    return;
+  }
+
+  const room = {
+    roomNumber: roomNum,
+    type: document.getElementById('add-room-type').value,
+    status: document.getElementById('add-room-status') ? document.getElementById('add-room-status').value : 'AVAILABLE',
+    floor: floorVal,
+    maxGuests: guestsVal,
+    pricePerNight: priceVal,
+    description: descVal
+  };
 
   try {
     await api('/rooms', { method: 'POST', body: JSON.stringify(room) });
@@ -2456,10 +2914,11 @@ async function submitRoom(e) {
     closeModal('modal-add-room');
     e.target.reset();
     await refreshAllViews();
-    renderReports();
   } catch (err) {
-    showModalAlert('modal-add-room', err.message);
-    notify(err.message, 'err');
+    if (!err.isStress) {
+      showModalAlert('modal-add-room', err.message);
+      notify(err.message, 'err');
+    }
   } finally {
     if (btn) { btn.disabled = false; btn.innerHTML = origText; }
   }
@@ -2471,7 +2930,6 @@ async function removeRoom(id) {
     await api(`/rooms/${id}`, { method: 'DELETE' });
     notify('Номер успешно удален');
     await refreshAllViews();
-    renderReports();
   } catch (err) {
     notify(err.message, 'err');
   }
@@ -2486,34 +2944,77 @@ async function submitBooking(e) {
 
   clearModalAlert('modal-add-booking');
 
-  const payload = {
-    roomId: parseInt(document.getElementById('newbook-room').value),
-    guestId: parseInt(document.getElementById('newbook-guest').value),
-    checkInDate: document.getElementById('newbook-checkin').value,
-    checkOutDate: document.getElementById('newbook-checkout').value,
-    guestCount: parseInt(document.getElementById('newbook-count').value)
-  };
+  const roomVal = document.getElementById('newbook-room')?.value;
+  const guestVal = document.getElementById('newbook-guest')?.value;
+  const checkIn = document.getElementById('newbook-checkin')?.value;
+  const checkOut = document.getElementById('newbook-checkout')?.value;
+  const guestCountRaw = parseInt(document.getElementById('newbook-count')?.value, 10);
+  const nightsRaw = parseInt(document.getElementById('newbook-nights')?.value, 10);
 
-  if (payload.guestCount > 10 || isNaN(payload.guestCount) || payload.guestCount <= 0 || payload.guestCount > 100) {
+  if (isNaN(guestCountRaw) || guestCountRaw <= 0 || guestCountRaw > 10) {
     triggerSamsonovStressOverlay({
       code: 'ERR_MAX_CLIENTS_TEST_OVERFLOW_418',
-      source: 'Форма бронирования: поле «Количество гостей» = ' + payload.guestCount,
-      reason: `Попытка проверить максимальное число клиентов в одном номере (введено: ${payload.guestCount}, лимит: 10 гостей).`,
-      details: 'Илья Валерьевич, номерной фонд отеля защищен от переполнения буфера постояльцев! Вместимость не может превышать 10 человек.'
+      source: 'Форма бронирования: поле «Количество гостей» = ' + document.getElementById('newbook-count')?.value,
+      reason: `Попытка указать недопустимое число гостей в одном номере (введено: ${document.getElementById('newbook-count')?.value}, лимит: 1–10 чел.).`,
+      details: 'Номерной фонд защищен от переполнения буфера постояльцев.'
     });
     if (btn) { btn.disabled = false; btn.innerHTML = origText; }
     return;
   }
+
+  if (!isNaN(nightsRaw) && (nightsRaw <= 0 || nightsRaw > 365)) {
+    triggerSamsonovStressOverlay({
+      code: 'ERR_BOOKING_DURATION_OVERFLOW_418',
+      source: 'Форма бронирования: количество ночей = ' + nightsRaw,
+      reason: `Аномальный срок бронирования (${nightsRaw} ноч., допустимо: 1–365 ночей).`,
+      details: 'Ограничение максимального горизонта планирования сработало успешно.'
+    });
+    if (btn) { btn.disabled = false; btn.innerHTML = origText; }
+    return;
+  }
+
+  if (!roomVal || !guestVal) {
+    showModalAlert('modal-add-booking', 'Выберите гостя и доступный номер для бронирования');
+    if (btn) { btn.disabled = false; btn.innerHTML = origText; }
+    return;
+  }
+
+  if (!checkIn || !checkOut || checkIn >= checkOut) {
+    showModalAlert('modal-add-booking', 'Дата выезда должна быть строго позже даты заезда');
+    if (btn) { btn.disabled = false; btn.innerHTML = origText; }
+    return;
+  }
+
+  const diffDays = calculateNights(checkIn, checkOut);
+  if (diffDays > 365) {
+    triggerSamsonovStressOverlay({
+      code: 'ERR_BOOKING_DURATION_OVERFLOW_418',
+      source: `Период ${checkIn} → ${checkOut} (${diffDays} ноч.)`,
+      reason: `Срок проживания ${diffDays} ноч. превышает допустимый предел 365 ночей.`,
+      details: 'Сработала защита календарных расчетов.'
+    });
+    if (btn) { btn.disabled = false; btn.innerHTML = origText; }
+    return;
+  }
+
+  const payload = {
+    roomId: parseInt(roomVal, 10),
+    guestId: parseInt(guestVal, 10),
+    checkInDate: checkIn,
+    checkOutDate: checkOut,
+    guestCount: guestCountRaw
+  };
 
   try {
     await api('/bookings', { method: 'POST', body: JSON.stringify(payload) });
     notify('Бронирование оформлено');
     closeModal('modal-add-booking');
     await refreshAllViews();
-    renderReports();
   } catch (err) {
-    showModalAlert('modal-add-booking', err.message);
-    notify(err.message, 'err');
+    if (!err.isStress) {
+      showModalAlert('modal-add-booking', err.message);
+      notify(err.message, 'err');
+    }
   } finally {
     if (btn) { btn.disabled = false; btn.innerHTML = origText; }
   }
@@ -2525,7 +3026,6 @@ async function cancelBooking(id) {
     await api(`/bookings/${id}`, { method: 'DELETE' });
     notify('Бронирование аннулировано');
     await refreshAllViews();
-    renderReports();
   } catch (err) {
     notify(err.message, 'err');
   }
@@ -2549,15 +3049,48 @@ async function submitGuest(e) {
     nationality: document.getElementById('guest-nat').value.trim() || 'Россия'
   };
 
+  if (
+    hasInjectionPayload(guest.firstName) ||
+    hasInjectionPayload(guest.lastName) ||
+    hasInjectionPayload(guest.email) ||
+    hasInjectionPayload(guest.phone) ||
+    hasInjectionPayload(guest.passportNumber) ||
+    hasInjectionPayload(guest.nationality)
+  ) {
+    triggerSamsonovStressOverlay({
+      code: 'ERR_SECURITY_INJECTION_418',
+      source: 'Форма регистрации гостя',
+      reason: 'Обнаружена попытка XSS/SQL-инъекции в анкете гостя.',
+      details: 'Потенциально опасные последовательности заблокированы.'
+    });
+    if (btn) { btn.disabled = false; btn.innerHTML = origText; }
+    return;
+  }
+
+  // Штатные ошибки заполнения формы (обычные подсказки без оверлея)
+  if (!guest.firstName || !guest.lastName || !guest.phone || !guest.email || !guest.passportNumber) {
+    showModalAlert('modal-add-guest', 'Пожалуйста, заполните все обязательные поля: Имя, Фамилия, Телефон, Email и Паспорт');
+    if (btn) { btn.disabled = false; btn.innerHTML = origText; }
+    return;
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guest.email)) {
+    showModalAlert('modal-add-guest', 'Укажите корректный адрес электронной почты (например, ivan@mail.ru)');
+    if (btn) { btn.disabled = false; btn.innerHTML = origText; }
+    return;
+  }
+
   try {
     await api('/guests', { method: 'POST', body: JSON.stringify(guest) });
     notify('Гость зарегистрирован в базе');
     closeModal('modal-add-guest');
     e.target.reset();
+    document.getElementById('guest-nat').value = 'Россия';
     await refreshAllViews();
   } catch (err) {
-    showModalAlert('modal-add-guest', err.message);
-    notify(err.message, 'err');
+    if (!err.isStress) {
+      showModalAlert('modal-add-guest', err.message);
+      notify(err.message, 'err');
+    }
   } finally {
     if (btn) { btn.disabled = false; btn.innerHTML = origText; }
   }
@@ -2578,18 +3111,48 @@ async function submitStaff(e) {
     position: document.getElementById('staff-pos').value,
     email: document.getElementById('staff-em').value.trim(),
     phone: document.getElementById('staff-ph').value.trim(),
-    hireDate: document.getElementById('staff-date').value || new Date().toISOString().split('T')[0]
+    hireDate: document.getElementById('staff-date').value || new Date().toISOString().split('T')[0],
+    active: true
   };
+
+  if (
+    hasInjectionPayload(member.firstName) ||
+    hasInjectionPayload(member.lastName) ||
+    hasInjectionPayload(member.email) ||
+    hasInjectionPayload(member.phone)
+  ) {
+    triggerSamsonovStressOverlay({
+      code: 'ERR_SECURITY_INJECTION_418',
+      source: 'Форма приема сотрудника',
+      reason: 'Обнаружена попытка XSS/SQL-инъекции в карточке сотрудника.',
+      details: 'Потенциально опасная нагрузка заблокирована.'
+    });
+    if (btn) { btn.disabled = false; btn.innerHTML = origText; }
+    return;
+  }
+
+  if (!member.firstName || !member.lastName || !member.phone || !member.email) {
+    showModalAlert('modal-add-staff', 'Заполните Имя, Фамилию, Телефон и Email сотрудника');
+    if (btn) { btn.disabled = false; btn.innerHTML = origText; }
+    return;
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(member.email)) {
+    showModalAlert('modal-add-staff', 'Введите корректный Email сотрудника');
+    if (btn) { btn.disabled = false; btn.innerHTML = origText; }
+    return;
+  }
 
   try {
     await api('/staff', { method: 'POST', body: JSON.stringify(member) });
     notify('Сотрудник принят в штат');
     closeModal('modal-add-staff');
     e.target.reset();
-    renderStaff();
+    await refreshAllViews();
   } catch (err) {
-    showModalAlert('modal-add-staff', err.message);
-    notify(err.message, 'err');
+    if (!err.isStress) {
+      showModalAlert('modal-add-staff', err.message);
+      notify(err.message, 'err');
+    }
   } finally {
     if (btn) { btn.disabled = false; btn.innerHTML = origText; }
   }
@@ -2600,7 +3163,7 @@ async function removeStaff(id) {
   try {
     await api(`/staff/${id}`, { method: 'DELETE' });
     notify('Сотрудник исключен из штата');
-    renderStaff();
+    await refreshAllViews();
   } catch (err) {
     notify(err.message, 'err');
   }
@@ -2711,15 +3274,38 @@ function updateNavCounts(counts = {}) {
   }
 }
 
+window.addEventListener('error', (event) => {
+  if (event && event.message) {
+    triggerSamsonovStressOverlay({
+      code: 'ERR_FRONTEND_RUNTIME_EXCEPTION',
+      source: 'Клиентское ядро интерфейса',
+      reason: event.message,
+      details: 'Нештатная ошибка интерфейса перехвачена и изолирована без потери данных.'
+    });
+  }
+});
+
+window.addEventListener('unhandledrejection', (event) => {
+  const reason = event?.reason;
+  const msg = (reason && reason.message) ? reason.message : String(reason || '');
+  if (!msg || reason?.handledByApi || reason?.name === 'AbortError') return;
+  triggerSamsonovStressOverlay({
+    code: 'ERR_FRONTEND_PROMISE_EXCEPTION',
+    source: 'Асинхронный обработчик интерфейса',
+    reason: msg,
+    details: 'Нештатная асинхронная ошибка перехвачена без остановки работы системы.'
+  });
+});
+
 window.addEventListener('DOMContentLoaded', async () => {
   setupNavigation();
   await checkBackendConnection();
-  navigateTo('dashboard');
+  await navigateTo('dashboard');
   populateBookingSelects();
   setInterval(checkBackendConnection, 15000);
 
   // Интерактивные триггеры защиты от стресс-тестирования Ильей Валерьевичем
-  const emblem = document.querySelector('.brand-emblem');
+  const emblem = document.querySelector('.brand-emblem-box');
   if (emblem) {
     emblem.style.cursor = 'pointer';
     emblem.addEventListener('dblclick', () => {
@@ -2734,50 +3320,4 @@ window.addEventListener('DOMContentLoaded', async () => {
       window.triggerSamsonovStressTest('CLIENTS');
     }
   });
-
-  // Мониторинг ввода граничных значений в реальном времени
-  const bookCountInput = document.getElementById('newbook-count');
-  if (bookCountInput) {
-    bookCountInput.addEventListener('input', function () {
-      const val = parseInt(this.value);
-      if (val > 10 || val > 100) {
-        triggerSamsonovStressOverlay({
-          code: 'ERR_MAX_CLIENTS_TEST_OVERFLOW_418',
-          source: 'Поле «Количество гостей» (введено: ' + this.value + ')',
-          reason: `Попытка установить запредельное количество гостей в одном номере (введено: ${this.value}, лимит: 10 чел.).`,
-          details: 'Илья Валерьевич, отель защищен от попытки зарегистрировать слишком много клиентов в одну комнату!'
-        });
-      }
-    });
-  }
-
-  const payAmountInput = document.getElementById('pay-amount');
-  if (payAmountInput) {
-    payAmountInput.addEventListener('input', function () {
-      const val = parseFloat(this.value);
-      if (val > 5000000) {
-        triggerSamsonovStressOverlay({
-          code: 'ERR_MAX_PAYMENT_OVERFLOW_418',
-          source: 'Поле «Сумма платежа» (введено: ' + formatRub(val) + ')',
-          reason: `Попытка провести максимальную сумму платежа (${formatRub(val)}, лимит: 5 000 000 ₽).`,
-          details: 'Илья Валерьевич, банковский эквайринг учебной гостиницы заблокировал запредельную сумму!'
-        });
-      }
-    });
-  }
-
-  const roomPriceInput = document.getElementById('add-room-price');
-  if (roomPriceInput) {
-    roomPriceInput.addEventListener('input', function () {
-      const val = parseFloat(this.value);
-      if (val > 1000000) {
-        triggerSamsonovStressOverlay({
-          code: 'ERR_MAX_PRICE_OVERFLOW_418',
-          source: 'Поле «Цена за сутки» (введено: ' + formatRub(val) + ')',
-          reason: `Попытка установить максимальную стоимость номера (${formatRub(val)}, лимит: 1 000 000 ₽).`,
-          details: 'Илья Валерьевич, даже в пятизвездочном отеле действуют ценовые ограничения!'
-        });
-      }
-    });
-  }
 });

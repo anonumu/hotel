@@ -12,7 +12,6 @@ public class PaymentRequestDto {
     private Long bookingId;
 
     @NotNull(message = "Сумма платежа обязательна")
-    @DecimalMin(value = "0.01", message = "Сумма должна быть больше нуля")
     private BigDecimal amount;
 
     @NotNull(message = "Способ оплаты обязателен")

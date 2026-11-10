@@ -3,6 +3,8 @@ package com.hotel.service;
 import com.hotel.dto.PaymentRequestDto;
 import com.hotel.exception.BusinessLogicException;
 import com.hotel.exception.ResourceNotFoundException;
+import com.hotel.exception.SecuritySanitizer;
+import com.hotel.exception.StressTestOverflowException;
 import com.hotel.model.Booking;
 import com.hotel.model.BookingStatus;
 import com.hotel.model.Payment;
@@ -35,11 +37,21 @@ public class PaymentService {
 
     // Регистрация нового платежа
     public Payment createPayment(PaymentRequestDto dto) {
-        if (dto.getAmount() == null || dto.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
+        SecuritySanitizer.assertSafeText(dto.getDescription(), "Назначение платежа");
+        if (dto.getAmount() == null) {
+            throw new BusinessLogicException("Сумма платежа обязательна");
+        }
+        if (dto.getAmount().compareTo(BigDecimal.ZERO) < 0) {
+            throw new StressTestOverflowException(
+                    "Передана отрицательная сумма платежа (" + dto.getAmount() + " ₽). Илья Валерьевич, перестаньте насиловать мой проект!",
+                    "ERR_NEGATIVE_PAYMENT_OVERFLOW_418"
+            );
+        }
+        if (dto.getAmount().compareTo(BigDecimal.ZERO) == 0) {
             throw new BusinessLogicException("Сумма платежа должна быть строго больше нуля");
         }
         if (dto.getAmount().compareTo(new BigDecimal("5000000")) > 0) {
-            throw new com.hotel.exception.StressTestOverflowException(
+            throw new StressTestOverflowException(
                     "Сумма платежа (" + dto.getAmount() + " ₽) превышает лимит разового эквайринга гостиницы (макс: 5 000 000 ₽). Илья Валерьевич, перестаньте насиловать мой проект!",
                     "ERR_MAX_PAYMENT_OVERFLOW_418"
             );

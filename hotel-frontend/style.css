@@ -201,21 +201,6 @@ body {
   flex-shrink: 0;
 }
 
-.nav-capsule-badge {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.12);
-  color: #ffffff;
-  font-weight: 800;
-  font-size: 11px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-right: 2px;
-  flex-shrink: 0;
-}
-
 .nav-item {
   display: inline-flex;
   align-items: center;
@@ -331,25 +316,6 @@ body {
   justify-content: center;
   cursor: pointer;
   box-shadow: 0 2px 6px rgba(79, 70, 229, 0.25);
-}
-  background: #f8fafc;
-  color: #0f172a;
-  border-color: #cbd5e1;
-}
-
-.user-avatar-badge {
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  background: #4f46e5;
-  color: #ffffff;
-  font-weight: 700;
-  font-size: 12.5px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  box-shadow: 0 2px 6px rgba(79, 70, 229, 0.2);
 }
 
 /* ==========================================================================
@@ -614,12 +580,45 @@ body {
   align-items: flex-end;
 }
 
-/* Плашки номеров и кнопка мгновенного заселения (Карточка 4) */
+.bento-stat-card.clickable,
+.bento-card.clickable {
+  cursor: pointer;
+  transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.bento-stat-card.clickable:hover,
+.bento-card.clickable:hover {
+  transform: translateY(-2px);
+  border-color: #6366f1;
+  box-shadow: 0 8px 22px rgba(79, 70, 229, 0.09);
+}
+
+.bento-stat-card.clickable:hover .bento-arrow-diag svg {
+  stroke: #4f46e5;
+  transform: translate(1px, -1px);
+}
+
+.bento-nav-cue {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  transition: color 0.15s ease;
+}
+
+.bento-stat-card.clickable:hover .bento-nav-cue,
+.bento-card.clickable:hover .bento-nav-cue {
+  color: #4f46e5;
+}
+
 .bento-chips-row {
   display: flex;
   align-items: center;
   gap: 6px;
   width: 100%;
+  flex-wrap: wrap;
 }
 
 .finnova-mini-chip {
@@ -628,15 +627,29 @@ body {
   background: #f8fafc;
   border: 1px solid #e2e8f0;
   color: #475569;
-  padding: 4px 8px;
+  padding: 4px 9px;
   border-radius: 8px;
   white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+
+.finnova-mini-chip:hover {
+  border-color: #4f46e5;
+  color: #4f46e5;
+  background: #eef2ff;
 }
 
 .finnova-mini-chip.active {
   background: #4f46e5;
   color: #ffffff;
   border-color: #4f46e5;
+}
+
+.finnova-mini-chip.active:hover {
+  background: #4338ca;
+  color: #ffffff;
 }
 
 .finnova-payout-btn {
@@ -743,9 +756,9 @@ body {
   background: #ffffff;
   border: 1px solid #e2e8f0;
   border-radius: 9999px;
-  padding: 8px 16px;
+  padding: 5px 14px;
   font-size: 13px;
-  color: #475569;
+  color: #334155;
   font-weight: 500;
   cursor: pointer;
   transition: border-color 0.15s ease;
@@ -755,8 +768,37 @@ body {
   border-color: #cbd5e1;
 }
 
-.pill-date-label {
+.pill-date-select {
+  appearance: none;
+  border: none;
+  background: transparent;
+  font-family: inherit;
   font-size: 13px;
+  font-weight: 500;
+  color: #334155;
+  cursor: pointer;
+  outline: none;
+  padding-right: 4px;
+}
+
+.filter-active-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #0f172a;
+  color: #ffffff;
+  border: none;
+  border-radius: 9999px;
+  padding: 7px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.filter-active-pill:hover {
+  background: #1e293b;
 }
 
 .filter-search-box {
@@ -1182,13 +1224,8 @@ body {
 }
 
 .cockpit-primary-white-btn:hover {
-  background: #f8fafc;
+  background: #f1f5f9;
   transform: translateY(-1px);
-}
-}
-
-.cockpit-primary-white-btn:hover {
-  background: var(--slate-100);
 }
 
 /* ==========================================================================
@@ -1758,6 +1795,35 @@ body {
   border-radius: 9999px;
 }
 
+.btn-sm {
+  padding: 7px 14px;
+  font-size: 12.5px;
+  border-radius: 9999px;
+}
+
+.btn-danger {
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: #fee2e2;
+  border-color: #fca5a5;
+  color: #991b1b;
+}
+
+.btn-brass {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+
+.btn-brass:hover:not(:disabled) {
+  background: #fde68a;
+  color: #78350f;
+}
+
 /* Сетка персонала */
 .staff-grid {
   display: grid;
@@ -1768,17 +1834,43 @@ body {
 .staff-card {
   background: #ffffff;
   border: 1px solid var(--slate-200);
-  border-radius: 10px;
-  padding: 18px;
+  border-radius: 14px;
+  padding: 20px;
   display: flex;
   flex-direction: column;
+  gap: 12px;
 }
 
+.staff-top,
 .staff-card-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 12px;
+  gap: 10px;
+}
+
+.staff-details {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12.5px;
+  color: var(--slate-600);
+  padding: 10px 0;
+  border-top: 1px solid var(--slate-100);
+  border-bottom: 1px solid var(--slate-100);
+}
+
+.empty-db-banner {
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  border-radius: 14px;
+  padding: 16px 20px;
+  margin-bottom: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
 }
 
 .staff-name {
@@ -1951,21 +2043,32 @@ body {
   gap: 14px;
 }
 
-.form-group.col-4 {
+.form-grid > .form-group {
+  grid-column: span 6;
+  min-width: 0;
+}
+
+.form-grid > .form-group.col-4 {
   grid-column: span 4;
 }
 
-.form-group.col-6 {
+.form-grid > .form-group.col-6 {
   grid-column: span 6;
 }
 
-.form-group.col-8 {
+.form-grid > .form-group.col-8 {
   grid-column: span 8;
 }
 
-.form-group.col-12,
-.form-group.full {
+.form-grid > .form-group.col-12,
+.form-grid > .form-group.full {
   grid-column: span 12;
+}
+
+@media (max-width: 600px) {
+  .form-grid > .form-group {
+    grid-column: span 12 !important;
+  }
 }
 
 .form-label,
