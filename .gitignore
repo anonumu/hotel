@@ -10,6 +10,8 @@
 .DS_Store
 Thumbs.db
 ~$*
+*.py
+__pycache__/
 
 # Внутренние служебные файлы
 .agents/
