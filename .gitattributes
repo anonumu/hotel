@@ -1,0 +1,23 @@
+# Настройка анализатора языков GitHub (GitHub Linguist)
+# Исключение внешних утилит, скриптов автоматизации и бинарных сборок из статистики языков репозитория
+
+# Встроенный инструментарий сборки Maven
+hotel-backend/maven/** linguist-vendored
+
+# Скрипты запуска и командные файлы ОС (исключает категорию Batchfile из репозитория)
+*.cmd linguist-vendored
+*.cmd linguist-detectable=false
+*.bat linguist-vendored
+*.bat linguist-detectable=false
+*.ps1 linguist-vendored
+*.ps1 linguist-detectable=false
+*.sh linguist-vendored
+*.sh linguist-detectable=false
+
+# Исключение Python из статистики языков
+*.py linguist-vendored
+*.py linguist-detectable=false
+
+# Скомпилированные артефакты и сгенерированные ресурсы
+hotel-backend/target/** linguist-vendored
+hotel-backend/target/** linguist-generated

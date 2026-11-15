@@ -26,7 +26,7 @@
 - **Безопасность:** Spring Security (контроль доступа к эндпоинтам, защита от инъекций и переполнения).
 - **База данных:** H2 In-Memory Database (по умолчанию, стартует «из коробки») / PostgreSQL (поддержка через профиль `postgres`).
 - **ORM:** Spring Data JPA / Hibernate (автоматическая генерация схемы и связи между сущностями).
-- **Сборщик проекта:** Apache Maven (включает встроенный Maven в `hotel-backend/maven` и скрипт `mvnw.cmd`).
+- **Сборщик проекта:** Apache Maven (включает встроенный Maven в `hotel-backend/maven`).
 - **Тестирование:** JUnit 5, Spring Boot Test (модульные и интеграционные тесты сервисов).
 - **Консоль H2:** `http://localhost:8080/h2-console` (JDBC URL: `jdbc:h2:mem:hoteldb`, пользователь: `sa`, пароль пустой).
 - **Тестовые данные:** Автоматически загружаются из `data.sql` при старте приложения.
@@ -56,7 +56,7 @@ java -jar hotel-backend/target/hotel-backend-1.0.0.jar
 cd hotel-backend
 mvn spring-boot:run
 ```
-*(Если системный Maven не установлен в PATH, можно использовать встроенный: `.\mvnw.cmd spring-boot:run`)*.
+*(Если системный Maven не установлен в PATH, можно использовать встроенный: `.\maven\bin\mvn spring-boot:run`)*.
 
 ### Запуск фронтенда отдельно
 
