@@ -71,8 +71,8 @@ public class SecurityConfig {
             .csrf().disable()
             .headers().frameOptions().disable().and() // Для консоли H2
             .authorizeRequests()
-                // Разрешаем веб-интерфейс и статические файлы
-                .antMatchers("/", "/index.html", "/style.css", "/app.js", "/favicon.ico", "/error").permitAll()
+                // Разрешаем веб-интерфейс и статические файлы (включая модульные скрипты в /js/**)
+                .antMatchers("/", "/index.html", "/style.css", "/app.js", "/js/**", "/css/**", "/favicon.ico", "/error").permitAll()
                 // Разрешаем веб-консоль H2
                 .antMatchers("/h2-console/**").permitAll()
                 // Разрешаем публичный доступ к REST API для клиентского фронтенда
