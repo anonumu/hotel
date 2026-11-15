@@ -22,7 +22,7 @@
 * **Безопасность:** Spring Security 5.7 (HTTP Basic, ролевая модель, фильтрация CORS, защита от перегрузок).
 * **Валидация:** Hibernate Validator / Jakarta Bean Validation (`@Valid`, `@NotNull`, `@Min`, `@Max`).
 * **Сборка и управление зависимостями:** Apache Maven 3.8+.
-* **Тестирование:** JUnit 5 (Jupiter), Mockito, Spring Boot Starter Test.
+
 
 ---
 
@@ -312,9 +312,4 @@ b.checkInDate < :checkOutDate AND b.checkOutDate > :checkInDate
 * Выручка группируется по способам оплаты (`CARD`, `CASH`, `TRANSFER`) на основе записей таблицы `Payment`.
 Такой подход не требует дублирования предрассчитанных итогов в БД и гарантирует актуальность аналитики.
 
-### 8.10. Модульное тестирование
-В пакете `src/test/java/com/hotel/` реализованы автоматические тесты:
-* `RoomServiceTest` — тестирование бизнес-логики управления номерами и смены статусов.
-* `BookingServiceTest` — тестирование валидации дат, лимитов гостей и расчета стоимости.
-* `SecuritySanitizerTest` — тестирование перехвата опасных последовательностей символов.
-Все тесты изолированы и успешно выполняются при каждой сборке `mvn clean package`.
+
