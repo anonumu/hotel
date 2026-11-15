@@ -9,8 +9,14 @@
 *.log
 .DS_Store
 Thumbs.db
+~$*
 
 # Внутренние служебные файлы
 .agents/
 push-to-github.bat
+
+# Временные тестовые отчеты и скомпилированные тесты
+hotel-backend/target/test-classes/
+hotel-backend/target/surefire-reports/
+hotel-backend/target/maven-status/maven-compiler-plugin/testCompile/
 
