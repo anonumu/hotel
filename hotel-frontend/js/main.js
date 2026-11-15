@@ -1,7 +1,4 @@
-// ==========================================================================
-// МОДУЛЬ: Точка входа приложения и глобальные слушатели событий
-// ==========================================================================
-
+// Инициализация интерфейса и обработчики событий
 
 window.addEventListener('error', (event) => {
   if (event && event.message) {
@@ -33,7 +30,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   populateBookingSelects();
   setInterval(checkBackendConnection, 15000);
 
-  // Интерактивные триггеры защиты от стресс-тестирования Ильей Валерьевичем
+  // Двойной клик по логотипу запускает тестовый оверлей
   const emblem = document.querySelector('.brand-emblem-box');
   if (emblem) {
     emblem.style.cursor = 'pointer';
@@ -42,7 +39,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  // Горячая клавиша Ctrl+Shift+S для демонстрации перехвата на защите
+  // Горячие клавиши Ctrl+Shift+S для демонстрации на защите
   window.addEventListener('keydown', (e) => {
     if (e.ctrlKey && e.shiftKey && (e.key === 'S' || e.key === 's' || e.key === 'Ы' || e.key === 'ы')) {
       e.preventDefault();

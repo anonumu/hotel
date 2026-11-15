@@ -1,10 +1,4 @@
-// ==========================================================================
-// МОДУЛЬ: Служба приема, регистрация гостей, Check-In/Check-Out, Folio Invoice
-// ==========================================================================
-
-// ==========================================================================
-// 4. СЛУЖБА ПРИЕМА И ГОСТИ (Ясная привязка к номеру, ночи и быстрое заселение)
-// ==========================================================================
+// Работа с гостями и заселением
 async function renderGuests(cachedGuests, cachedBooks, cachedRooms) {
   const [guests, bookings, rooms] = (cachedGuests && cachedBooks && cachedRooms)
     ? [cachedGuests, cachedBooks, cachedRooms]
@@ -312,7 +306,6 @@ async function checkOutGuest(id) {
     notify(err.message, 'err');
   }
 }
-
 
 async function submitGuest(e) {
   e.preventDefault();

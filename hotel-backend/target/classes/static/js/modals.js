@@ -1,6 +1,4 @@
-// ==========================================================================
-// МОДУЛЬ: Управление модальными окнами и обновление представлений
-// ==========================================================================
+// Работа с модальными окнами и обновление данных
 
 function showModalAlert(modalId, message) {
   const alertEl = document.getElementById(`${modalId}-alert`);
@@ -50,10 +48,6 @@ async function refreshAllViews() {
   }
 }
 
-
-// ==========================================================================
-// УПРАВЛЕНИЕ МОДАЛЬНЫМИ ОКНАМИ
-// ==========================================================================
 function openModal(id) {
   clearModalAlert(id);
   const m = document.getElementById(id);
@@ -68,5 +62,3 @@ function closeModal(id) {
   const m = document.getElementById(id);
   if (m) m.classList.remove('active');
 }
-
-// Смена статуса номера

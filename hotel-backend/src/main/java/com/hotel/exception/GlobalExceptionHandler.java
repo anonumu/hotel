@@ -30,7 +30,7 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
     }
 
-    // Обработка стресс-тестирования граничных значений Ильей Валерьевичем (HTTP 418 / Overload Trapped)
+    // Обработка выхода за допустимые лимиты (418)
     @ExceptionHandler(StressTestOverflowException.class)
     public ResponseEntity<ErrorResponseDto> handleStressTest(StressTestOverflowException ex) {
         ErrorResponseDto error = new ErrorResponseDto(
@@ -109,7 +109,7 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
     }
 
-    // Обработка нечитаемого JSON или недопустимых значений enum (фаззинг API / некорректный ввод)
+    // Некорректный формат JSON или недопустимое значение
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ErrorResponseDto> handleNotReadable(HttpMessageNotReadableException ex) {
         ErrorResponseDto error = new ErrorResponseDto(
@@ -121,7 +121,7 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
     }
 
-    // Обработка неверного типа параметра в URL или query (фаззинг параметров)
+    // Неверный тип параметра в запросе
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<ErrorResponseDto> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
         String param = ex.getName();

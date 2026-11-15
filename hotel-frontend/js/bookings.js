@@ -1,10 +1,5 @@
-// ==========================================================================
-// МОДУЛЬ: Бронирования, расчет стоимости, доступность номеров
-// ==========================================================================
+// Бронирования и расчет стоимости
 
-// ==========================================================================
-// ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ РАСЧЕТА ДАТ И НОЧЕЙ
-// ==========================================================================
 function calculateNights(checkInDateStr, checkOutDateStr) {
   if (!checkInDateStr || !checkOutDateStr) return 1;
   const d1 = new Date(checkInDateStr);
@@ -47,11 +42,6 @@ function getRemainingNightsBadge(checkOutDateStr, status) {
   }
 }
 
-// Единое реактивное обновление всех представлений
-
-// ==========================================================================
-// 3. БРОНИРОВАНИЯ
-// ==========================================================================
 async function renderBookings(cachedBooks, cachedRooms, cachedGuests) {
   const [books, rooms, guests] = (cachedBooks && cachedRooms && cachedGuests)
     ? [cachedBooks, cachedRooms, cachedGuests]
@@ -120,9 +110,7 @@ async function renderBookings(cachedBooks, cachedRooms, cachedGuests) {
   }
 }
 
-// ==========================================================================
-// ДИНАМИЧЕСКАЯ ФИЛЬТРАЦИЯ НОМЕРОВ ПО ДАТАМ И ПРОВЕРКА ЗАНЯТОСТИ
-// ==========================================================================
+// Проверка занятости номеров на выбранные даты
 function updateRoomOptionsForDates(checkIn, checkOut, selectId = 'newbook-room') {
   const rSel = document.getElementById(selectId);
   if (!rSel || !globalRoomsCache || globalRoomsCache.length === 0) return;
@@ -335,7 +323,6 @@ async function openBookingWithRoom(roomId) {
     recalculateBookingSummary();
   }
 }
-
 
 async function submitBooking(e) {
   e.preventDefault();

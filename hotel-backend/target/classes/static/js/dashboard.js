@@ -1,10 +1,4 @@
-// ==========================================================================
-// МОДУЛЬ: Дашборд, архитектурный поэтажный план и коридоры
-// ==========================================================================
-
-// ==========================================================================
-// 1. ДАШБОРД И АРХИТЕКТУРНЫЙ ПОЭТАЖНЫЙ ПЛАН
-// ==========================================================================
+// Сводка и поэтажный план отеля
 let globalRoomsCache = [];
 let globalGuestsCache = [];
 let globalBookingsCache = [];
@@ -692,15 +686,15 @@ function generateDoorHtml(room) {
 
   return `
     <div class="door-wrapper">
-      <!-- Реалистичная дверь номера -->
+      
       <div class="hotel-door ${room.status}" onclick="openRoomStatusModal(${room.id}, '${room.roomNumber}', '${room.status}')">
-        <!-- Латунная табличка с номером -->
+        
         <div class="door-plaque">
           <div class="door-number">${room.roomNumber}</div>
           <div class="door-category-label">${LABELS.types[room.type] || room.type}</div>
         </div>
 
-        <!-- Электронный замок и ручка -->
+        
         <div class="door-handle-lock">
           <div class="lock-sensor">
             <span class="lock-led"></span>
@@ -709,7 +703,7 @@ function generateDoorHtml(room) {
           <div class="door-handle-hardware"></div>
         </div>
 
-        <!-- Табличка на ручке -->
+        
         <div>
           <div class="door-hanger-card ${room.status}">
             ${LABELS.roomStatuses[room.status] || room.status}
@@ -717,11 +711,11 @@ function generateDoorHtml(room) {
           <div class="door-price-tag">${formatRub(room.pricePerNight)}/сут.</div>
         </div>
 
-        <!-- Мягкая подсветка порога -->
+        
         <div class="door-threshold"></div>
       </div>
 
-      <!-- ВСПЛЫВАЮЩАЯ КАРТОЧКА ПРИ НАВЕДЕНИИ -->
+      
       <div class="door-popover">
         <div class="popover-header">
           <div>

@@ -49,9 +49,7 @@ public class SystemController {
         return ResponseEntity.ok(info);
     }
 
-    /**
-     * Полное восстановление эталонных тестовых данных в БД (защита от случайного удаления всех записей).
-     */
+    // Сброс и заполнение демо-данными
     @PostMapping("/reset-demo")
     @Transactional
     public ResponseEntity<Map<String, Object>> resetDemoData() {

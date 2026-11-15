@@ -13,10 +13,7 @@ import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.Deque;
 
-/**
- * Серверный предохранитель от скриптового флуда запросами на изменение БД.
- * Штатные GET-запросы и обычная работа оператора никогда не ограничиваются.
- */
+// Ограничение частоты запросов на изменение данных для защиты от флуда
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE + 10)
 public class MutationRateLimitFilter extends OncePerRequestFilter {

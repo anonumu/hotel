@@ -1,10 +1,7 @@
-// ==========================================================================
-// МОДУЛЬ: Персонал, смены и отметка присутствия «На работе / Выходной»
-// ==========================================================================
+// Управление персоналом и сменами
+let staffFilterMode = 'ALL';
+let currentScheduleStaffId = null;
 
-// ==========================================================================
-// 5. ПЕРСОНАЛ
-// ==========================================================================
 function filterStaffView(mode, btn) {
   staffFilterMode = mode;
   document.querySelectorAll('#staff-filter-tabs .floor-tab-btn').forEach(b => b.classList.remove('active'));
@@ -120,7 +117,6 @@ function toggleStaffFromModal() {
   toggleStaffStatus(currentScheduleStaffId, nextActive);
 }
 
-
 async function submitStaff(e) {
   e.preventDefault();
   const btn = document.getElementById('add-staff-submit-btn');
@@ -193,7 +189,6 @@ async function removeStaff(id) {
     notify(err.message, 'err');
   }
 }
-
 
 async function openStaffSchedule(id) {
   const sch = await api(`/staff/${id}/schedule`);

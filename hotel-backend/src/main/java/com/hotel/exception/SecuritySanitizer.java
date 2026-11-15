@@ -2,10 +2,7 @@ package com.hotel.exception;
 
 import java.util.regex.Pattern;
 
-/**
- * Защита входных текстовых полей от XSS-инъекций и SQL-атак при тестировании на отказ.
- * Обычные символы (буквы, цифры, пробелы, дефисы, скобки, @, .) не блокируются.
- */
+// Базовая проверка текста на XSS и SQL инъекции
 public final class SecuritySanitizer {
 
     private static final Pattern DANGEROUS_PATTERN = Pattern.compile(
