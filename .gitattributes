@@ -1,23 +1,32 @@
-# Настройка анализатора языков GitHub (GitHub Linguist)
-# Исключение внешних утилит, скриптов автоматизации и бинарных сборок из статистики языков репозитория
+# GitHub Linguist language overrides
+# Documentation: https://github.com/github-linguist/linguist/blob/master/docs/overrides.md
 
-# Встроенный инструментарий сборки Maven
+# Ignore third-party Maven distribution completely
 hotel-backend/maven/** linguist-vendored
+hotel-backend/maven/** -linguist-detectable
 
-# Скрипты запуска и командные файлы ОС (исключает категорию Batchfile из репозитория)
+# Ignore all scripts, batch files, and shell scripts
 *.cmd linguist-vendored
-*.cmd linguist-detectable=false
+*.cmd -linguist-detectable
 *.bat linguist-vendored
-*.bat linguist-detectable=false
+*.bat -linguist-detectable
 *.ps1 linguist-vendored
-*.ps1 linguist-detectable=false
+*.ps1 -linguist-detectable
 *.sh linguist-vendored
-*.sh linguist-detectable=false
+*.sh -linguist-detectable
 
-# Исключение Python из статистики языков
+# Ignore all Python files completely
 *.py linguist-vendored
-*.py linguist-detectable=false
+*.py -linguist-detectable
 
-# Скомпилированные артефакты и сгенерированные ресурсы
+# Ignore build artifacts
 hotel-backend/target/** linguist-vendored
 hotel-backend/target/** linguist-generated
+hotel-backend/target/** -linguist-detectable
+
+# Primary project languages
+hotel-backend/src/main/java/** linguist-language=Java
+hotel-backend/src/test/java/** linguist-language=Java
+hotel-frontend/js/** linguist-language=JavaScript
+hotel-frontend/index.html linguist-language=HTML
+hotel-frontend/style.css linguist-language=CSS
