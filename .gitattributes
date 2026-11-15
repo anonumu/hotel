@@ -26,7 +26,6 @@ hotel-backend/target/** -linguist-detectable
 
 # Primary project languages
 hotel-backend/src/main/java/** linguist-language=Java
-hotel-backend/src/test/java/** linguist-language=Java
 hotel-frontend/js/** linguist-language=JavaScript
 
 # Presentation assets and UI rendering
