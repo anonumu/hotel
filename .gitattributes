@@ -24,18 +24,8 @@ hotel-backend/target/** linguist-vendored
 hotel-backend/target/** linguist-generated
 hotel-backend/target/** -linguist-detectable
 
-# Primary project languages
+# Real project languages
 hotel-backend/src/main/java/** linguist-language=Java
 hotel-frontend/js/** linguist-language=JavaScript
-
-# Presentation assets and UI rendering
-hotel-frontend/index.html linguist-vendored
-hotel-frontend/index.html -linguist-detectable
-hotel-frontend/style.css linguist-vendored
-hotel-frontend/style.css -linguist-detectable
-hotel-frontend/js/dashboard.js linguist-vendored
-hotel-frontend/js/dashboard.js -linguist-detectable
-hotel-frontend/js/modals.js linguist-vendored
-hotel-frontend/js/modals.js -linguist-detectable
-hotel-frontend/js/reports.js linguist-vendored
-hotel-frontend/js/reports.js -linguist-detectable
+hotel-frontend/index.html linguist-language=HTML
+hotel-frontend/style.css linguist-language=CSS
